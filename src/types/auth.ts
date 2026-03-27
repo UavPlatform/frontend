@@ -42,3 +42,21 @@ export interface AuthSession {
   expiresAt: string
   user: UserProfile
 }
+
+export interface UserRecord {
+  id: number
+  userName: string
+  djiId: string
+  start_time: string
+  end_time: string
+}
+
+export interface RecordsResponse {
+  success: boolean
+  records: UserRecord[]
+  total: number
+  page: number
+  size: number
+  totalPages: number
+  message?: string
+}

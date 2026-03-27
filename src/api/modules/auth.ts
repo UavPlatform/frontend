@@ -7,6 +7,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   RefreshTokenResponse,
+  RecordsResponse,
 } from '../../types/auth'
 
 const buildSession = (payload: LoginRequest, token: string, refreshToken?: string): AuthSession => ({
@@ -64,4 +65,16 @@ export const refreshAccessToken = async (refreshToken: string) => {
   }
 
   return response.data.token
+}
+
+export const getLiveRecords = async (page: number = 0, size: number = 10) => {
+  const response = (await request.get('/user/records', {
+    params: { page, size }
+  })) as { data: RecordsResponse }
+
+  if (!response.data.success) {
+    throw new Error(response.data.message ?? '获取直播记录失败')
+  }
+
+  return response.data
 }
