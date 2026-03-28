@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
   DataAnalysis,
   Monitor,
@@ -8,6 +8,7 @@ import {
   Setting,
   SwitchButton,
   Warning,
+  DocumentCopy,
 } from '@element-plus/icons-vue'
 import { logout } from '../api/modules/auth'
 import { getStoredSession } from '../api/session'
@@ -18,16 +19,28 @@ defineProps<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 
 const menuItems = [
-  { label: '无人机总览', icon: Monitor, active: true },
-  { label: '飞行任务', icon: Operation, active: false },
-  { label: '视频监控', icon: DataAnalysis, active: false },
-  { label: '告警中心', icon: Warning, active: false },
-  { label: '系统设置', icon: Setting, active: false },
+  { label: '无人机总览', icon: Monitor, route: 'dashboard' },
+  { label: '历史记录', icon: DocumentCopy, route: 'records' },
+  { label: '飞行任务', icon: Operation, route: '' },
+  { label: '视频监控', icon: DataAnalysis, route: '' },
+  { label: '告警中心', icon: Warning, route: '' },
+  { label: '系统设置', icon: Setting, route: '' },
 ]
 
 const userName = computed(() => getStoredSession()?.user.displayName ?? '值班管理员')
+
+const getActiveItem = () => {
+  return menuItems.find(item => item.route === route.name)?.route || 'dashboard'
+}
+
+const activeRoute = ref(getActiveItem())
+
+watch(() => route.name, () => {
+  activeRoute.value = getActiveItem()
+})
 
 const handleLogout = () => {
   logout()
@@ -52,14 +65,16 @@ const handleLogout = () => {
             v-for="item in menuItems"
             :key="item.label"
             class="menu-item"
-            :class="{ 'menu-item-active': item.active }"
+            :class="{ 'menu-item-active': item.route === activeRoute }"
             type="button"
+            @click="item.route && router.push({ name: item.route })"
+            :disabled="!item.route"
           >
             <el-icon class="text-lg">
               <component :is="item.icon" />
             </el-icon>
             <span>{{ item.label }}</span>
-            <el-tag v-if="!item.active" size="small" type="info" effect="plain">规划中</el-tag>
+            <el-tag v-if="!item.route" size="small" type="info" effect="plain">规划中</el-tag>
           </button>
         </div>
 
@@ -95,8 +110,10 @@ const handleLogout = () => {
           <div
             v-for="item in menuItems"
             :key="item.label"
-            class="rounded-full px-4 py-2 text-sm whitespace-nowrap"
-            :class="item.active ? 'bg-[#10233f] text-white' : 'bg-[#f1f5f9] text-[#475569]'"
+            class="rounded-full px-4 py-2 text-sm whitespace-nowrap cursor-pointer"
+            :class="item.route === activeRoute ? 'bg-[#10233f] text-white' : 'bg-[#f1f5f9] text-[#475569]'"
+            @click="item.route && router.push({ name: item.route })"
+            :style="!item.route && { cursor: 'not-allowed', opacity: 0.6 }"
           >
             {{ item.label }}
           </div>
