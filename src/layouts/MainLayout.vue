@@ -15,7 +15,7 @@ import { getStoredSession } from '../api/session'
 
 defineProps<{
   title: string
-  subtitle: string
+  subtitle?: string
 }>()
 
 const router = useRouter()
@@ -51,13 +51,10 @@ const handleLogout = () => {
 <template>
   <div class="min-h-screen px-4 py-4 md:px-6 md:py-6">
     <div class="mx-auto flex max-w-[1600px] gap-4">
-      <aside class="panel-card hidden min-h-[calc(100vh-3rem)] w-[280px] shrink-0 p-5 lg:flex lg:flex-col">
-        <div class="rounded-6 bg-[#10233f] p-5 text-white">
-          <div class="text-xs uppercase tracking-[0.3em] text-white/60">UAV Console</div>
-          <div class="mt-3 text-2xl font-800 tracking-tight">空域指挥台</div>
-          <div class="mt-2 text-sm leading-6 text-white/70">
-            统一调度无人机状态、指令和运行概况。
-          </div>
+      <aside class="panel-card hidden min-h-[calc(100vh-3rem)] w-[260px] shrink-0 p-5 lg:flex lg:flex-col">
+        <div class="border-b border-[#ebeef5] pb-5">
+          <div class="text-xs uppercase tracking-[0.28em] text-[#909399]">UAV Console</div>
+          <div class="mt-3 text-2xl font-800 tracking-tight text-[#303133]">空域指挥台</div>
         </div>
 
         <div class="mt-5 flex-1 space-y-2">
@@ -78,27 +75,25 @@ const handleLogout = () => {
           </button>
         </div>
 
-        <div class="rounded-6 bg-[#f8fafc] p-4">
-          <div class="text-sm font-700 text-[#10233f]">{{ userName }}</div>
-          <div class="mt-1 text-xs text-[#6b7a90]">控制中心值守席位</div>
+        <div class="border-t border-[#ebeef5] pt-4">
+          <div class="text-sm font-700 text-[#303133]">{{ userName }}</div>
+          <div class="mt-1 text-xs text-[#909399]">控制中心值守席位</div>
         </div>
       </aside>
 
       <div class="flex min-h-[calc(100vh-3rem)] min-w-0 flex-1 flex-col gap-4">
         <header class="panel-card flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div class="text-3xl font-800 tracking-tight text-[#10233f]">{{ title }}</div>
-            <div class="mt-2 max-w-[820px] text-sm leading-6 text-[#6b7a90]">
+            <div class="text-xs uppercase tracking-[0.24em] text-[#909399]">Flight Control</div>
+            <div class="mt-2 text-3xl font-800 tracking-tight text-[#303133]">{{ title }}</div>
+            <div v-if="subtitle" class="mt-2 text-sm leading-6 text-[#606266]">
               {{ subtitle }}
             </div>
           </div>
 
           <div class="flex flex-col gap-3 md:flex-row md:items-center">
             <slot name="header-extra" />
-            <div class="rounded-5 bg-[#eff6ff] px-4 py-3">
-              <div class="text-sm font-700 text-[#10233f]">{{ userName }}</div>
-              <div class="text-xs text-[#52709a]">空域控制中心 / 值守中</div>
-            </div>
+            <el-tag effect="plain">值守中</el-tag>
             <el-button type="danger" plain @click="handleLogout">
               <el-icon class="mr-1"><SwitchButton /></el-icon>
               退出登录
@@ -111,7 +106,7 @@ const handleLogout = () => {
             v-for="item in menuItems"
             :key="item.label"
             class="rounded-full px-4 py-2 text-sm whitespace-nowrap cursor-pointer"
-            :class="item.route === activeRoute ? 'bg-[#10233f] text-white' : 'bg-[#f1f5f9] text-[#475569]'"
+            :class="item.route === activeRoute ? 'bg-[#ecf5ff] text-[#303133]' : 'bg-[#f5f7fa] text-[#606266]'"
             @click="item.route && router.push({ name: item.route })"
             :style="!item.route && { cursor: 'not-allowed', opacity: 0.6 }"
           >
@@ -134,17 +129,22 @@ const handleLogout = () => {
   align-items: center;
   gap: 12px;
   border: 1px solid transparent;
-  border-radius: 18px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 12px 14px;
   background: transparent;
-  color: #516178;
+  color: #606266;
   font-size: 14px;
   font-weight: 600;
 }
 
+.menu-item:hover {
+  border-color: #ebeef5;
+  background: #f5f7fa;
+}
+
 .menu-item-active {
-  border-color: rgba(37, 99, 235, 0.16);
-  background: linear-gradient(135deg, #eff6ff, #ffffff);
-  color: #10233f;
+  border-color: #d9ecff;
+  background: #ecf5ff;
+  color: #303133;
 }
 </style>

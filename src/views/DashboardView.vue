@@ -3,11 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
-import DroneStats from '../components/dashboard/DroneStats.vue'
 import OnlineUavTable from '../components/dashboard/OnlineUavTable.vue'
 import { listAllUavs, listOnlineUavs } from '../api/modules/uav'
 import { requestStartLive } from '../api/modules/live'
-import type { DashboardStat, UavItem, UavListMode } from '../types/uav'
+import type { UavItem, UavListMode } from '../types/uav'
 
 const router = useRouter()
 
@@ -25,8 +24,32 @@ const selectedUav = ref<UavItem>()
 const pendingAction = ref<'start-live'>()
 const pendingDeviceId = ref('')
 const startedDeviceIds = ref<string[]>([])
+const lastUpdatedAt = ref('--:--:--')
 
 const currentList = computed(() => (viewMode.value === 'online' ? onlineUavs.value : allUavs.value))
+const currentModeLabel = computed(() => (viewMode.value === 'online' ? '在线机队' : '全量机队'))
+const onlineCoverage = computed(() => `${onlineUavs.value.length}/${allUavs.value.length || 0}`)
+const selectedStateLabel = computed(() => {
+  if (!selectedUav.value) {
+    return '待锁定'
+  }
+
+  return selectedUav.value.isOnline ? '在线待命' : '离线'
+})
+const selectedStateTagType = computed<'success' | 'info'>(() => {
+  if (!selectedUav.value) {
+    return 'info'
+  }
+
+  return selectedUav.value.isOnline ? 'success' : 'info'
+})
+const selectedLiveState = computed(() => {
+  if (!selectedUav.value) {
+    return '未启动'
+  }
+
+  return startedDeviceIds.value.includes(selectedUav.value.deviceId) ? '已启动' : '未启动'
+})
 
 const filteredUavs = computed(() => {
   const keyword = query.keyword.trim().toLowerCase()
@@ -47,45 +70,56 @@ const pagedUavs = computed(() => {
   return filteredUavs.value.slice(start, start + query.pageSize)
 })
 
-const stats = computed<DashboardStat[]>(() => [
+const overviewItems = computed(() => [
   {
-    label: '在线无人机',
+    label: '在线机数',
     value: onlineUavs.value.length,
-    hint: '当前正在连接中的无人机数量',
-    trend: '实时更新',
-    tone: 'primary',
+    tag: '实时',
+    tagType: 'primary' as const,
   },
   {
-    label: '全部无人机',
+    label: '全部机数',
     value: allUavs.value.length,
-    hint: '系统当前可查看的全部无人机数据',
-    trend: '完整机队',
-    tone: 'success',
+    tag: '总量',
+    tagType: 'success' as const,
   },
   {
-    label: '当前选中设备',
+    label: '当前目标',
     value: selectedUav.value?.deviceId ?? '--',
-    hint: '右侧操作面板会跟随当前选中无人机切换',
-    trend: selectedUav.value?.uavName ?? '未选择',
-    tone: 'warning',
+    tag: selectedStateLabel.value,
+    tagType: selectedStateTagType.value,
   },
   {
-    label: '已发起直播',
+    label: '直播任务',
     value: startedDeviceIds.value.length,
-    hint: '本次会话里已执行过直播启动的设备数',
-    trend: '操作记录',
-    tone: 'danger',
+    tag: '本次会话',
+    tagType: 'warning' as const,
   },
 ])
 
+const formatCurrentTime = () =>
+  new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(new Date())
+
 const syncSelectedUav = () => {
-  if (!selectedUav.value) {
-    selectedUav.value = currentList.value[0]
+  const source = currentList.value.length > 0 ? currentList.value : allUavs.value
+
+  if (source.length === 0) {
+    selectedUav.value = undefined
     return
   }
 
-  const matched = allUavs.value.find((item) => item.deviceId === selectedUav.value?.deviceId)
-  selectedUav.value = matched ?? currentList.value[0]
+  if (!selectedUav.value) {
+    selectedUav.value = source[0]
+    return
+  }
+
+  const matched = source.find((item) => item.deviceId === selectedUav.value?.deviceId)
+  selectedUav.value = matched ?? source[0]
 }
 
 const loadUavs = async () => {
@@ -100,12 +134,12 @@ const loadUavs = async () => {
       isOnline: true,
     }))
 
-    const mergedAll = (allResult.list.length > 0 ? allResult.list : onlineResult.list).map((item) => ({
+    allUavs.value = (allResult.list.length > 0 ? allResult.list : onlineResult.list).map((item) => ({
       ...item,
       isOnline: onlineIdSet.has(item.id),
     }))
 
-    allUavs.value = mergedAll
+    lastUpdatedAt.value = formatCurrentTime()
     syncSelectedUav()
 
     if (onlineResult.message && onlineResult.list.length === 0 && viewMode.value === 'online') {
@@ -173,38 +207,56 @@ onMounted(() => {
 </script>
 
 <template>
-  <MainLayout
-    title="无人机管理总台"
-    subtitle="统一查看在线无人机和全部无人机数据，选中设备后在右侧执行直播或进入操作界面。"
-  >
+  <MainLayout title="无人机管理总台" subtitle="机队态势与控制执行">
     <div class="flex flex-col gap-4">
-      <DroneStats :items="stats" />
+      <section class="panel-card p-4 md:p-5">
+        <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
+          <div
+            v-for="item in overviewItems"
+            :key="item.label"
+            class="rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-[#606266]">{{ item.label }}</span>
+              <el-tag size="small" :type="item.tagType" effect="plain">
+                {{ item.tag }}
+              </el-tag>
+            </div>
+            <div class="mt-3 text-3xl font-700 tracking-tight text-[#303133]">
+              {{ item.value }}
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div class="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_380px]">
+      <div class="grid gap-4 2xl:grid-cols-[minmax(0,1.8fr)_340px]">
         <section class="panel-card p-4 md:p-5">
           <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <div class="text-xl font-800 tracking-tight text-[#10233f]">无人机列表</div>
-              <div class="mt-1 text-sm text-[#6b7a90]">
-                支持查看当前在线无人机和全部无人机数据，并从列表快速进入操作。
-              </div>
+              <div class="text-xl font-700 tracking-tight text-[#303133]">设备队列</div>
             </div>
 
             <div class="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
               <el-radio-group v-model="viewMode" @change="handleReset">
-                <el-radio-button label="online" value="online">在线无人机</el-radio-button>
-                <el-radio-button label="all" value="all">全部无人机</el-radio-button>
+                <el-radio-button label="online" value="online">在线机队</el-radio-button>
+                <el-radio-button label="all" value="all">全量机队</el-radio-button>
               </el-radio-group>
               <el-input
                 v-model="query.keyword"
-                class="md:!w-[240px]"
+                class="md:!w-[220px]"
                 clearable
                 placeholder="搜索设备 ID / 名称"
                 @input="handleSearch"
               />
               <el-button @click="handleReset">重置</el-button>
-              <el-button @click="loadUavs">刷新列表</el-button>
+              <el-button @click="loadUavs">刷新</el-button>
             </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3 text-sm text-[#606266]">
+            <span>当前视图：<strong class="text-[#303133] font-600">{{ currentModeLabel }}</strong></span>
+            <span>选中目标：<strong class="text-[#303133] font-600">{{ selectedUav?.deviceId ?? '--' }}</strong></span>
+            <span>最近更新：<strong class="text-[#303133] font-600">{{ lastUpdatedAt }}</strong></span>
           </div>
 
           <div class="mt-5">
@@ -228,27 +280,30 @@ onMounted(() => {
 
         <aside class="flex flex-col gap-4">
           <section class="panel-card p-5">
-            <div class="text-lg font-800 tracking-tight text-[#10233f]">操作面板</div>
-            <div v-if="selectedUav" class="mt-4 rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">无人机名称</div>
-              <div class="mt-1 text-xl font-800 text-[#10233f]">{{ selectedUav.uavName }}</div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-lg font-700 tracking-tight text-[#303133]">当前设备</div>
+              <el-tag :type="selectedStateTagType" effect="plain">
+                {{ selectedStateLabel }}
+              </el-tag>
+            </div>
 
-              <div class="mt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <div class="text-sm text-[#6b7a90]">设备 ID</div>
-                  <div class="mt-1 text-base font-700 text-[#10233f]">{{ selectedUav.deviceId }}</div>
-                </div>
-                <div>
-                  <div class="text-sm text-[#6b7a90]">连接状态</div>
-                  <div class="mt-1">
-                    <el-tag :type="selectedUav.isOnline ? 'success' : 'info'" effect="dark">
-                      {{ selectedUav.isOnline ? '在线' : '离线' }}
-                    </el-tag>
-                  </div>
-                </div>
-              </div>
+            <template v-if="selectedUav">
+              <el-descriptions class="mt-4" :column="1" border size="small">
+                <el-descriptions-item label="无人机名称">
+                  {{ selectedUav.uavName }}
+                </el-descriptions-item>
+                <el-descriptions-item label="设备 ID">
+                  {{ selectedUav.deviceId }}
+                </el-descriptions-item>
+                <el-descriptions-item label="链路状态">
+                  {{ selectedUav.isOnline ? '可下发指令' : '等待上线' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="直播任务">
+                  {{ selectedLiveState }}
+                </el-descriptions-item>
+              </el-descriptions>
 
-              <div class="mt-5 grid grid-cols-1 gap-3">
+              <div class="mt-4 grid grid-cols-1 gap-3">
                 <el-button
                   type="primary"
                   :disabled="!selectedUav.isOnline"
@@ -260,23 +315,31 @@ onMounted(() => {
                 <el-button type="success" plain @click="handleEnterOperate(selectedUav)">
                   进入操作
                 </el-button>
-                <el-button @click="loadUavs">刷新设备数据</el-button>
+                <el-button @click="loadUavs">刷新设备</el-button>
               </div>
-            </div>
-            <el-empty v-else description="当前没有可操作的无人机" />
+            </template>
+            <el-empty v-else description="暂无目标设备" :image-size="80" />
           </section>
 
           <section class="panel-card p-5">
-            <div class="text-lg font-800 tracking-tight text-[#10233f]">操作提示</div>
-            <div class="mt-4 space-y-3 text-sm leading-6 text-[#516178]">
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                选中无人机后，可以在这里直接启动直播或进入操作界面。
+            <div class="text-lg font-700 tracking-tight text-[#303133]">运行状态</div>
+
+            <div class="mt-4 flex flex-col gap-3">
+              <div class="flex items-center justify-between rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3 text-sm">
+                <span class="text-[#606266]">在线覆盖</span>
+                <strong class="text-[#303133] font-600">{{ onlineCoverage }}</strong>
               </div>
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                进入操作页后会自动尝试拉起图传，页面只保留图传与操作区的界面骨架。
+              <div class="flex items-center justify-between rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3 text-sm">
+                <span class="text-[#606266]">当前页容量</span>
+                <strong class="text-[#303133] font-600">{{ query.pageSize }}</strong>
               </div>
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                图传播放逻辑可以后续直接挂到操作页的视频区域。
+              <div class="flex items-center justify-between rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3 text-sm">
+                <span class="text-[#606266]">直播启动数</span>
+                <strong class="text-[#303133] font-600">{{ startedDeviceIds.length }}</strong>
+              </div>
+              <div class="flex items-center justify-between rounded-4 border border-[#ebeef5] bg-[#fafafa] px-4 py-3 text-sm">
+                <span class="text-[#606266]">最近更新</span>
+                <strong class="text-[#303133] font-600">{{ lastUpdatedAt }}</strong>
               </div>
             </div>
           </section>

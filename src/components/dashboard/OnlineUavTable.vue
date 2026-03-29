@@ -26,26 +26,23 @@ const isPending = (deviceId: string) =>
 
 <template>
   <div class="flex flex-col gap-4">
-    <el-table :data="uavs" :loading="loading" class="!rounded-5" stripe>
-      <el-table-column label="设备 ID" min-width="120">
+    <el-table :data="uavs" :loading="loading" border stripe>
+      <el-table-column label="设备 ID" min-width="160">
         <template #default="{ row }">
-          <div class="font-700 text-[#10233f]">{{ row.deviceId }}</div>
-          <div class="text-xs text-[#6b7a90]">数据库编号：{{ row.id }}</div>
+          <div class="font-600 text-[#303133]">{{ row.deviceId }}</div>
+          <div class="text-xs text-[#909399]">#{{ row.id }}</div>
         </template>
       </el-table-column>
 
-      <el-table-column label="无人机名称" min-width="190">
+      <el-table-column label="无人机名称" min-width="220">
         <template #default="{ row }">
-          <div class="font-700 text-[#10233f]">{{ row.uavName }}</div>
-          <div class="text-xs text-[#6b7a90]">
-            {{ row.isOnline ? '当前在线，可直接操作' : '已录入机队，当前未在线' }}
-          </div>
+          <div class="font-600 text-[#303133]">{{ row.uavName }}</div>
         </template>
       </el-table-column>
 
       <el-table-column label="状态" min-width="120">
         <template #default="{ row }">
-          <el-tag :type="row.isOnline ? 'success' : 'info'" effect="dark">
+          <el-tag :type="row.isOnline ? 'success' : 'info'" effect="plain">
             {{ row.isOnline ? '在线' : '离线' }}
           </el-tag>
         </template>
@@ -53,13 +50,13 @@ const isPending = (deviceId: string) =>
 
       <el-table-column label="当前选中" min-width="120">
         <template #default="{ row }">
-          <el-tag :type="row.deviceId === activeDeviceId ? 'primary' : 'info'">
+          <el-tag :type="row.deviceId === activeDeviceId ? 'primary' : 'info'" effect="plain">
             {{ row.deviceId === activeDeviceId ? '已选中' : '未选中' }}
           </el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" fixed="right" min-width="300">
+      <el-table-column label="操作" fixed="right" min-width="260">
         <template #default="{ row }">
           <div class="flex flex-wrap gap-2">
             <el-button size="small" @click="emit('select', row)">选择</el-button>
