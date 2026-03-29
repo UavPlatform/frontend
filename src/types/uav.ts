@@ -19,7 +19,7 @@ export interface UavRuntimeStatus {
 export interface UavItem {
   id: number
   uavName: string
-  deviceId: string
+  deviceId?: string
   isOnline: boolean
   controllerModel?: string
   onlineStatus?: string

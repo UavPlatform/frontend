@@ -4,10 +4,10 @@ import type { LiveState, UavItem, UavListResult, UavRuntimeStatus } from '../../
 interface BackendUavItem {
   id: number
   uavName: string
-  djiId: string
+  djiId?: string
   controllerModel?: string
   onlineStatus?: string
-  wsConnected: boolean
+  wsConnected?: boolean
   liveState?: LiveState
   latestStatus?: UavRuntimeStatus | null
 }
@@ -24,7 +24,7 @@ const mapBackendUav = (item: BackendUavItem): UavItem => {
     id: item.id,
     uavName: item.uavName,
     deviceId: item.djiId,
-    isOnline: item.wsConnected,
+    isOnline: item.wsConnected === true,
     controllerModel: item.controllerModel,
     onlineStatus: item.onlineStatus,
     liveState: item.liveState,
@@ -35,11 +35,12 @@ const mapBackendUav = (item: BackendUavItem): UavItem => {
 const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
   const response = await request.get<BackendUavListResponse>(url)
   const items = response.data.uav ?? []
-  const filteredItems = onlyOnline ? items.filter((item) => item.wsConnected) : items
+  const filteredItems = onlyOnline ? items.filter((item) => item.wsConnected === true) : items
+  const onlineUnavailable = onlyOnline && items.length > 0 && items.every((item) => item.wsConnected == null)
 
   return {
     success: response.data.success,
-    message: response.data.message,
+    message: onlineUnavailable ? '当前后端列表接口未返回在线状态，在线机队暂不可用' : response.data.message,
     list: filteredItems.map((item) => mapBackendUav(item)),
   }
 }
