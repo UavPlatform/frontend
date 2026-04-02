@@ -78,3 +78,27 @@ export const getLiveRecords = async (page: number = 0, size: number = 10) => {
 
   return response.data
 }
+
+export const adminLogin = async (payload: { name: string; password: string }): Promise<AuthSession> => {
+  const response = (await request.post('/admin/login', payload)) as {
+    data: { success: boolean; data: { token: string; admin: { id: number; name: string; phoneNumber: string } }; message: string }
+  }
+
+  if (!response.data.success || !response.data.data?.token) {
+    throw new Error(response.data.message ?? '管理员登录失败')
+  }
+
+  const session: AuthSession = {
+    token: response.data.data.token,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    user: {
+      username: response.data.data.admin.name,
+      displayName: response.data.data.admin.name,
+      role: 'admin',
+      teamName: 'UAV Admin Console',
+    },
+  }
+
+  setStoredSession(session)
+  return session
+}

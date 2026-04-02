@@ -21,19 +21,29 @@ defineProps<{
 const router = useRouter()
 const route = useRoute()
 
-const menuItems = [
-  { label: '无人机总览', icon: Monitor, route: 'dashboard' },
-  { label: '历史记录', icon: DocumentCopy, route: 'records' },
-  { label: '飞行任务', icon: Operation, route: '' },
-  { label: '视频监控', icon: DataAnalysis, route: '' },
-  { label: '告警中心', icon: Warning, route: '' },
-  { label: '系统设置', icon: Setting, route: '' },
-]
+const menuItems = computed(() => {
+  const baseItems = [
+    { label: '无人机总览', icon: Monitor, route: 'dashboard' },
+    { label: '历史记录', icon: DocumentCopy, route: 'records' },
+    { label: '飞行任务', icon: Operation, route: '' },
+    { label: '视频监控', icon: DataAnalysis, route: '' },
+    { label: '告警中心', icon: Warning, route: '' },
+  ]
+  
+  const session = getStoredSession()
+  const userRole = session?.user?.role
+  
+  if (userRole === 'admin') {
+    baseItems.splice(2, 0, { label: '管理员中心', icon: Setting, route: 'admin' })
+  }
+  
+  return baseItems
+})
 
 const userName = computed(() => getStoredSession()?.user.displayName ?? '值班管理员')
 
 const getActiveItem = () => {
-  return menuItems.find(item => item.route === route.name)?.route || 'dashboard'
+  return menuItems.value.find(item => item.route === route.name)?.route || 'dashboard'
 }
 
 const activeRoute = ref(getActiveItem())

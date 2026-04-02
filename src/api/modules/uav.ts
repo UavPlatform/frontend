@@ -4,6 +4,7 @@ import type { UavItem, UavListResult } from '../../types/uav'
 interface BackendUavItem {
   id: number
   uavName: string
+  djiId: string
 }
 
 interface BackendUavListResponse {
@@ -15,12 +16,12 @@ interface BackendUavListResponse {
 const mapBackendUav = (item: BackendUavItem, isOnline: boolean): UavItem => ({
   id: item.id,
   uavName: item.uavName,
-  deviceId: String(item.id),
+  deviceId: item.djiId,
   isOnline,
 })
 
-const fetchUavList = async (url: string, isOnline: boolean): Promise<UavListResult> => {
-  const response = (await request.get(url)) as { data: BackendUavListResponse }
+const fetchUavList = async (url: string, isOnline: boolean, onlineOnly?: boolean): Promise<UavListResult> => {
+  const response = (await request.get(url, { params: { onlineOnly } })) as { data: BackendUavListResponse }
 
   return {
     success: response.data.success,
@@ -29,6 +30,6 @@ const fetchUavList = async (url: string, isOnline: boolean): Promise<UavListResu
   }
 }
 
-export const listOnlineUavs = async (): Promise<UavListResult> => fetchUavList('/webUav/getUav', true)
+export const listOnlineUavs = async (): Promise<UavListResult> => fetchUavList('/webUav/getUav', true, true)
 
-export const listAllUavs = async (): Promise<UavListResult> => fetchUavList('/appUav/getUav', false)
+export const listAllUavs = async (): Promise<UavListResult> => fetchUavList('/webUav/getUav', false, false)

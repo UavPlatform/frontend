@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import { getStoredSession } from '../api/session'
 import { getPullCredentials, requestStartLive } from '../api/modules/live'
 import type { LiveCredentials } from '../types/uav'
+
+// 动态导入TRTC SDK
+let TRTC: any = null
+let client: any = null
+let remoteStream: any = null
 
 const route = useRoute()
 const router = useRouter()
@@ -17,9 +22,10 @@ const session = computed(() => getStoredSession())
 const webUserId = computed(() => `web_${session.value?.user.username ?? 'guest'}`)
 
 const initializing = ref(false)
-const liveState = ref<'idle' | 'booting' | 'ready' | 'error'>('idle')
+const liveState = ref<'idle' | 'booting' | 'ready' | 'playing' | 'error'>('idle')
 const liveMessage = ref('进入页面后会自动尝试拉起图传。')
-const liveCredentials = ref<LiveCredentials>()
+const liveCredentials = ref<LiveCredentials & { wsUrl?: string }>()
+const ws = ref<WebSocket | null>(null)
 
 const initializeLive = async () => {
   if (!deviceId.value) {
@@ -33,12 +39,21 @@ const initializeLive = async () => {
   liveMessage.value = '正在初始化图传链路，请稍候...'
 
   try {
-    await requestStartLive(deviceId.value)
+    // 发送开播请求
+    const startResponse = await requestStartLive(deviceId.value)
+    console.log('开播请求响应:', startResponse)
+    
+    // 获取拉流凭证
     liveCredentials.value = await getPullCredentials(deviceId.value, webUserId.value)
+    console.log('拉流凭证:', liveCredentials.value)
+    
     liveState.value = 'ready'
     liveMessage.value = '图传初始化请求已发送，等待画面接入。'
+    
+    // 开始播放
+    await startPlayback()
   } catch (error) {
-    console.error(error)
+    console.error('初始化直播失败:', error)
     liveState.value = 'error'
     liveMessage.value = error instanceof Error ? error.message : '图传初始化失败'
     ElMessage.error(liveMessage.value)
@@ -47,8 +62,142 @@ const initializeLive = async () => {
   }
 }
 
+const startPlayback = async () => {
+  if (!liveCredentials.value) {
+    throw new Error('拉流凭证未就绪')
+  }
+
+  try {
+    console.log('开始播放，房间ID:', liveCredentials.value.roomId)
+
+    if (!TRTC) {
+      const trtcModule = await import('trtc-sdk-v5')
+      TRTC = trtcModule
+    }
+    
+    // 初始化 TRTC
+    client = TRTC.createClient({
+      mode: 'live',
+      sdkAppId: liveCredentials.value.sdkAppId,
+      userId: liveCredentials.value.userId,
+      userSig: liveCredentials.value.userSig
+    })
+
+    // 监听远程流添加事件
+    client.on('remote-stream-added', async (event: any) => {
+      const remoteStream = event.stream
+      console.log('远程流添加:', remoteStream.streamId)
+      await client.subscribe(remoteStream, { audio: true, video: true })
+    })
+
+    // 监听远程流订阅成功事件
+    client.on('remote-stream-subscribed', (event: any) => {
+      remoteStream = event.stream
+      console.log('远程流订阅成功:', remoteStream.streamId)
+      const videoElement = document.getElementById('remote-video')
+      if (videoElement) {
+        remoteStream.play(videoElement)
+        liveState.value = 'playing'
+        liveMessage.value = '图传画面已接入'
+      }
+    })
+
+    // 监听错误事件
+    client.on('error', (error: any) => {
+      console.error('TRTC错误:', error)
+      liveState.value = 'error'
+      liveMessage.value = `图传错误: ${error.message}`
+      ElMessage.error(liveMessage.value)
+    })
+
+    // 监听连接状态变化
+    client.on('connection-state-changed', (event: any) => {
+      console.log('连接状态:', event.state)
+    })
+
+    // 加入房间
+    await client.join({
+      roomId: liveCredentials.value.roomId
+    })
+    console.log('加入房间成功:', liveCredentials.value.roomId)
+
+    // 连接WebSocket，接收无人机实时状态
+    if (liveCredentials.value.wsUrl) {
+      connectWebSocket(liveCredentials.value.wsUrl)
+    }
+  } catch (error) {
+    console.error('开始播放失败:', error)
+    throw error
+  }
+}
+
+const connectWebSocket = (url: string) => {
+  try {
+    ws.value = new WebSocket(url)
+    
+    ws.value.onopen = () => {
+      console.log('WebSocket连接成功')
+    }
+    
+    ws.value.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        console.log('WebSocket消息:', data)
+        if (data.type === 'event' && data.name === 'UAV_STATUS_UPDATE') {
+          // 更新无人机状态
+          console.log('无人机状态更新:', data.data)
+        }
+      } catch (error) {
+        console.error('解析WebSocket消息失败:', error)
+      }
+    }
+    
+    ws.value.onclose = () => {
+      console.log('WebSocket连接关闭')
+    }
+    
+    ws.value.onerror = (error) => {
+      console.error('WebSocket错误:', error)
+    }
+  } catch (error) {
+    console.error('连接WebSocket失败:', error)
+  }
+}
+
+const stopPlayback = async () => {
+  // 关闭WebSocket连接
+  if (ws.value) {
+    try {
+      ws.value.close()
+      ws.value = null
+    } catch (error) {
+      console.error('关闭WebSocket失败:', error)
+    }
+  }
+
+  // 停止TRTC播放
+  if (client) {
+    try {
+      await client.leave()
+      if (remoteStream) {
+        remoteStream.stop()
+        remoteStream = null
+      }
+      client = null
+      liveState.value = 'idle'
+      liveMessage.value = '图传已停止'
+    } catch (error) {
+      console.error('停止播放失败:', error)
+    }
+  }
+}
+
 onMounted(() => {
   void initializeLive()
+})
+
+onUnmounted(() => {
+  void stopPlayback()
 })
 </script>
 
@@ -71,14 +220,17 @@ onMounted(() => {
 
         <div class="operation-video-shell mt-5 flex-1">
           <div class="operation-video-grid"></div>
-          <div class="operation-video-content">
+          <div class="operation-video-content" v-if="liveState !== 'playing'">
             <div class="rounded-full bg-white/10 px-4 py-2 text-xs tracking-[0.24em] text-white/70 uppercase">
               Live View
             </div>
             <div class="mt-6 text-4xl font-900 tracking-tight text-white">图传画面接入区</div>
             <div class="mt-4 max-w-[460px] text-center text-base leading-7 text-white/72">
-              这里预留给图传播放组件。当前页面会在进入时自动调用直播相关接口，后续你可以直接把图传逻辑挂到这个区域。
+              {{ liveMessage }}
             </div>
+          </div>
+          <div class="operation-video-content flex items-center justify-center" v-else>
+            <video id="remote-video" class="w-full max-w-full max-h-[520px] rounded-lg" autoplay playsinline></video>
           </div>
         </div>
       </section>

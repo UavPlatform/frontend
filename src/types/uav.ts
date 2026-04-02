@@ -23,6 +23,7 @@ export interface LiveCredentials {
   roomId: string
   userId: string
   userSig: string
+  sdkAppId: number
 }
 
 export interface DashboardStat {

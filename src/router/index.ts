@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { hasSessionToken } from '../api/session'
+import { getStoredSession, hasSessionToken } from '../api/session'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('../views/AdminView.vue'),
+    meta: { requiresAuth: true, roles: ['admin'] },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('../views/LoginView.vue'),
@@ -37,6 +43,15 @@ router.beforeEach((to) => {
 
   if (to.meta.requiresAuth && !authed) {
     return { name: 'login' }
+  }
+
+  if (to.meta.requiresAuth && to.meta.roles) {
+    const session = getStoredSession()
+    const userRole = session?.user?.role
+    
+    if (!userRole || !to.meta.roles.includes(userRole)) {
+      return { name: 'dashboard' }
+    }
   }
 
   if (to.name === 'login' && authed) {

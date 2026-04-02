@@ -4,12 +4,19 @@ import type { LiveCredentials, LiveStartResponse } from '../../types/uav'
 interface LiveActionResponse {
   success: boolean
   message?: string
+  code?: string
+  roomId?: string
+  requestId?: string
+  ackConfirmed?: boolean
+  liveState?: string
 }
 
 interface LiveCredentialsResponse extends LiveActionResponse {
   roomId?: string
   userId?: string
   userSig?: string
+  sdkAppId?: number
+  wsUrl?: string
 }
 
 export const requestStartLive = async (deviceId: string): Promise<LiveStartResponse> => {
@@ -30,12 +37,12 @@ export const requestStartLive = async (deviceId: string): Promise<LiveStartRespo
 export const getPullCredentials = async (
   deviceId: string,
   webUserId: string,
-): Promise<LiveCredentials> => {
+): Promise<LiveCredentials & { wsUrl?: string }> => {
   const response = (await request.post('/live/get', null, {
     params: { deviceId, webUserId },
   })) as { data: LiveCredentialsResponse }
 
-  if (!response.data.success || !response.data.roomId || !response.data.userId || !response.data.userSig) {
+  if (!response.data.success || !response.data.roomId || !response.data.userId || !response.data.userSig || !response.data.sdkAppId) {
     throw new Error(response.data.message ?? '拉流凭证生成失败')
   }
 
@@ -44,5 +51,7 @@ export const getPullCredentials = async (
     roomId: response.data.roomId,
     userId: response.data.userId,
     userSig: response.data.userSig,
+    sdkAppId: response.data.sdkAppId,
+    wsUrl: response.data.wsUrl,
   }
 }
