@@ -22,6 +22,7 @@ interface LiveCredentialsResponse extends LiveActionResponse {
   roomId?: string
   userId?: string
   userSig?: string
+  sdkAppId?: number
   wsUrl?: string
 }
 
@@ -58,7 +59,7 @@ export const getPullCredentials = async (
       params: { deviceId, webUserId },
     })
 
-    if (!response.data.success || !response.data.roomId || !response.data.userId || !response.data.userSig) {
+    if (!response.data.success || !response.data.roomId || !response.data.userId || !response.data.userSig || !response.data.sdkAppId) {
       throw new Error(response.data.message ?? '拉流凭证生成失败')
     }
 
@@ -67,6 +68,7 @@ export const getPullCredentials = async (
       roomId: response.data.roomId,
       userId: response.data.userId,
       userSig: response.data.userSig,
+      sdkAppId: response.data.sdkAppId,
       wsUrl: response.data.wsUrl,
       ackConfirmed: response.data.ackConfirmed ?? false,
       liveState: response.data.liveState,

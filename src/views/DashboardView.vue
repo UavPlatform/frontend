@@ -46,15 +46,23 @@ const selectedStateLabel = computed(() => {
     return '信息待补齐'
   }
 
+  if (selectedUav.value.isAvailable === '0') {
+    return '已禁用'
+  }
+
   return selectedUav.value.onlineStatus?.trim() || (selectedUav.value.isOnline ? '在线待命' : '离线')
 })
-const selectedStateTagType = computed<'success' | 'info'>(() => {
+const selectedStateTagType = computed<'success' | 'info' | 'danger'>(() => {
   if (!selectedUav.value) {
     return 'info'
   }
 
   if (!selectedUav.value.deviceId) {
     return 'info'
+  }
+
+  if (selectedUav.value.isAvailable === '0') {
+    return 'danger'
   }
 
   return selectedUav.value.isOnline ? 'success' : 'info'
@@ -190,7 +198,7 @@ const updateDeviceState = (deviceId: string, patch: Partial<UavItem>) => {
 }
 
 const canStartLive = (uav?: UavItem) =>
-  Boolean(uav?.deviceId) && Boolean(uav?.isOnline) && uav?.liveState !== 'STARTING' && uav?.liveState !== 'RUNNING'
+  Boolean(uav?.deviceId) && Boolean(uav?.isOnline) && uav?.isAvailable !== '0' && uav?.liveState !== 'STARTING' && uav?.liveState !== 'RUNNING'
 
 const getStartLiveLabel = (uav?: UavItem) => {
   if (uav?.liveState === 'RUNNING') {
@@ -299,6 +307,11 @@ const handleStartSelectedLive = () => {
 const handleEnterOperate = (uav: UavItem) => {
   if (!uav.deviceId) {
     ElMessage.info('当前后端列表接口未返回设备 ID，暂时无法进入操作页')
+    return
+  }
+
+  if (uav.isAvailable === '0') {
+    ElMessage.warning('该设备已被禁用，无法进入操作页')
     return
   }
 

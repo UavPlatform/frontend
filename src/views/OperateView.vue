@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
+import TrtcPlayer from '../components/TrtcPlayer.vue'
 import { getStoredSession } from '../api/session'
 import { listAllUavs } from '../api/modules/uav'
 import { closeLive, getPullCredentials, requestStartLive } from '../api/modules/live'
@@ -273,6 +274,19 @@ const initializeLive = async () => {
   }
 }
 
+const handleTrtcError = (message: string) => {
+  liveStage.value = 'error'
+  liveMessage.value = message
+}
+
+const handleTrtcConnected = () => {
+  liveMessage.value = '视频流已连接，正在播放画面。'
+}
+
+const handleTrtcDisconnected = () => {
+  liveMessage.value = '视频流已断开。'
+}
+
 onMounted(() => {
   void loadDeviceInfo()
   void initializeLive()
@@ -304,16 +318,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="operation-video-shell mt-5 flex-1">
-          <div class="operation-video-grid"></div>
-          <div class="operation-video-content">
-            <div class="rounded-full bg-white/10 px-4 py-2 text-xs tracking-[0.24em] text-white/70 uppercase">
-              Live View
-            </div>
-            <div class="mt-6 text-4xl font-900 tracking-tight text-white">图传画面接入区</div>
-            <div class="mt-4 max-w-[460px] text-center text-base leading-7 text-white/72">
-              这里预留给图传播放组件。当前页面已经完成开播请求、观看凭据申请和关闭会话调用，对接播放器时可以直接消费右侧展示的会话参数。
-            </div>
-          </div>
+          <TrtcPlayer :credentials="liveCredentials ?? null" @error="handleTrtcError" @connected="handleTrtcConnected" @disconnected="handleTrtcDisconnected" />
         </div>
       </section>
 
@@ -426,32 +431,6 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: hidden;
   border-radius: 28px;
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.35), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.28), transparent 24%),
-    linear-gradient(135deg, #0f172a, #10233f);
-}
-
-.operation-video-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 36px 36px;
-  mask-image: radial-gradient(circle at center, black, transparent 90%);
-}
-
-.operation-video-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  height: 100%;
-  min-height: 520px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  text-align: center;
+  background: linear-gradient(135deg, #0f172a, #10233f);
 }
 </style>

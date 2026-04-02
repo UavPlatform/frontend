@@ -29,7 +29,12 @@ const liveStateTextMap: Record<NonNullable<UavItem['liveState']>, string> = {
 const isPending = (deviceId?: string) =>
   !!deviceId && props.pendingAction === 'start-live' && props.pendingDeviceId === deviceId
 
-const getLinkStatusText = (uav: UavItem) => uav.onlineStatus?.trim() || (uav.isOnline ? '在线' : '离线')
+const getLinkStatusText = (uav: UavItem) => {
+  if (uav.isAvailable === '0') {
+    return '已禁用'
+  }
+  return uav.onlineStatus?.trim() || (uav.isOnline ? '在线' : '离线')
+}
 
 const getLiveStateText = (uav: UavItem) => (uav.liveState ? liveStateTextMap[uav.liveState] : '未启动')
 
@@ -63,7 +68,7 @@ const getRuntimeSummary = (uav: UavItem) => {
   return parts.join(' / ') || '暂无上报'
 }
 
-const canStartLive = (uav: UavItem) => uav.isOnline && uav.liveState !== 'STARTING' && uav.liveState !== 'RUNNING'
+const canStartLive = (uav: UavItem) => uav.isOnline && uav.isAvailable !== '0' && uav.liveState !== 'STARTING' && uav.liveState !== 'RUNNING'
 
 const getStartLiveLabel = (uav: UavItem) => {
   if (uav.liveState === 'RUNNING') {
@@ -97,7 +102,7 @@ const getStartLiveLabel = (uav: UavItem) => {
 
       <el-table-column label="链路状态" min-width="140">
         <template #default="{ row }">
-          <el-tag :type="row.isOnline ? 'success' : 'info'" effect="plain">
+          <el-tag :type="row.isAvailable === '0' ? 'danger' : (row.isOnline ? 'success' : 'info')" effect="plain">
             {{ getLinkStatusText(row) }}
           </el-tag>
         </template>
@@ -139,7 +144,7 @@ const getStartLiveLabel = (uav: UavItem) => {
             >
               {{ getStartLiveLabel(row) }}
             </el-button>
-            <el-button size="small" type="success" plain :disabled="!row.deviceId" @click="emit('enter-operate', row)">
+            <el-button size="small" type="success" plain :disabled="!row.deviceId || row.isAvailable === '0'" @click="emit('enter-operate', row)">
               进入操作
             </el-button>
           </div>

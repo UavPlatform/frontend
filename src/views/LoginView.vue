@@ -75,6 +75,10 @@ const handleRegister = async () => {
     registerLoading.value = false
   }
 }
+
+const goToAdminLogin = () => {
+  router.push({ name: 'admin-login' })
+}
 </script>
 
 <template>
@@ -204,6 +208,13 @@ const handleRegister = async () => {
               </el-form>
             </el-tab-pane>
           </el-tabs>
+
+          <div class="mt-6 border-t border-gray-200 pt-4 text-center">
+            <span class="text-sm text-gray-500">管理员？</span>
+            <el-button type="primary" link class="ml-2" @click="goToAdminLogin">
+              管理员登录入口
+            </el-button>
+          </div>
         </div>
       </section>
     </div>

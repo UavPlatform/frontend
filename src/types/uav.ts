@@ -25,6 +25,7 @@ export interface UavItem {
   onlineStatus?: string
   liveState?: LiveState
   latestStatus?: UavRuntimeStatus | null
+  isAvailable?: string
 }
 
 export interface UavListResult {
@@ -50,6 +51,7 @@ export interface LiveCredentials {
   roomId: string
   userId: string
   userSig: string
+  sdkAppId: number
   wsUrl?: string
   ackConfirmed?: boolean
   liveState?: LiveState

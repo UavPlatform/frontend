@@ -10,6 +10,7 @@ interface BackendUavItem {
   wsConnected?: boolean
   liveState?: LiveState
   latestStatus?: UavRuntimeStatus | null
+  isAvailable?: string
 }
 
 interface BackendUavListResponse {
@@ -29,6 +30,7 @@ const mapBackendUav = (item: BackendUavItem): UavItem => {
     onlineStatus: item.onlineStatus,
     liveState: item.liveState,
     latestStatus: item.latestStatus,
+    isAvailable: item.isAvailable,
   }
 }
 
