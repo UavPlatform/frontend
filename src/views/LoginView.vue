@@ -3,13 +3,14 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { EditPen, Lock, User } from '@element-plus/icons-vue'
-import { login, register } from '../api/modules/auth'
+import { login, register, adminLogin } from '../api/modules/auth'
 
 const router = useRouter()
 
 const activeTab = ref<'login' | 'register'>('login')
 const loginLoading = ref(false)
 const registerLoading = ref(false)
+const loginType = ref<'user' | 'admin'>('user')
 
 const loginForm = reactive({
   userName: '',
@@ -23,16 +24,25 @@ const registerForm = reactive({
 })
 
 const handleLogin = async () => {
-  if (!loginForm.userName.trim() || !loginForm.password) {
-    ElMessage.warning('请输入用户名和密码')
+  const isUser = loginType.value === 'user'
+  const userName = isUser ? loginForm.userName.trim() : loginForm.userName.trim()
+  const password = isUser ? loginForm.password : loginForm.password
+
+  if (!userName || !password) {
+    ElMessage.warning(isUser ? '请输入用户名和密码' : '请输入管理员用户名和密码')
     return
   }
 
   loginLoading.value = true
 
   try {
-    await login({ userName: loginForm.userName.trim(), password: loginForm.password })
-    ElMessage.success('登录成功')
+    if (isUser) {
+      await login({ userName, password })
+      ElMessage.success('登录成功')
+    } else {
+      await adminLogin({ name: userName, password })
+      ElMessage.success('管理员登录成功')
+    }
     await router.replace({ name: 'dashboard' })
   } catch (error) {
     console.error(error)
@@ -132,21 +142,28 @@ const goToAdminLogin = () => {
 
           <el-tabs v-model="activeTab" class="mt-8">
             <el-tab-pane label="登录" name="login">
+              <div class="mb-4">
+                <el-radio-group v-model="loginType" size="large">
+                  <el-radio-button value="user">普通用户</el-radio-button>
+                  <el-radio-button value="admin">管理员</el-radio-button>
+                </el-radio-group>
+              </div>
+
               <el-form label-position="top" @submit.prevent="handleLogin">
-                <el-form-item label="用户名">
-                  <el-input v-model="loginForm.userName" placeholder="请输入用户名">
+                <el-form-item :label="loginType === 'user' ? '用户名' : '管理员用户名'">
+                  <el-input v-model="loginForm.userName" :placeholder="loginType === 'user' ? '请输入用户名' : '请输入管理员用户名'">
                     <template #prefix>
                       <el-icon><User /></el-icon>
                     </template>
                   </el-input>
                 </el-form-item>
 
-                <el-form-item label="密码">
+                <el-form-item :label="loginType === 'user' ? '密码' : '管理员密码'">
                   <el-input
                     v-model="loginForm.password"
                     show-password
                     type="password"
-                    placeholder="请输入密码"
+                    :placeholder="loginType === 'user' ? '请输入密码' : '请输入管理员密码'"
                     @keyup.enter="handleLogin"
                   >
                     <template #prefix>
@@ -157,7 +174,7 @@ const goToAdminLogin = () => {
 
                 <div class="mt-8">
                   <el-button class="!h-12" type="primary" :loading="loginLoading" @click="handleLogin">
-                    进入控制台
+                    {{ loginType === 'user' ? '进入控制台' : '管理员登录' }}
                   </el-button>
                 </div>
               </el-form>
