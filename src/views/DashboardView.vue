@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import OnlineUavTable from '../components/dashboard/OnlineUavTable.vue'
 import { listAllUavs, listOnlineUavs } from '../api/modules/uav'
 import { requestStartLive } from '../api/modules/live'
-import type { UavItem, UavListMode } from '../types/uav'
+import { initUavWs, disconnectUavWs, onUavStatusUpdate, offUavStatusUpdate } from '../api/ws/modules/uav-ws'
+import type { UavItem, UavListMode, UavRuntimeStatus } from '../types/uav'
 
 const router = useRouter()
 

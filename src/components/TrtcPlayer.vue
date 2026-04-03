@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TRTC from 'trtc-sdk-v5'
 import type { LiveCredentials } from '../types/uav'
 
@@ -13,12 +13,37 @@ const emit = defineEmits<{
   (e: 'disconnected'): void
 }>()
 
+const playerRoot = ref<HTMLDivElement | null>(null)
 const videoContainer = ref<HTMLDivElement | null>(null)
 const trtcClient = ref<TRTC | null>(null)
 const isConnecting = ref(false)
 const isConnected = ref(false)
 const remoteUserId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
+const forceRotateRemoteVideo = true
+const rotationScale = ref(1)
+
+let resizeObserver: ResizeObserver | null = null
+
+const videoContainerStyle = computed(() => ({
+  '--rotation-scale': `${rotationScale.value}`,
+}))
+
+const updateRotationScale = () => {
+  if (!playerRoot.value || !forceRotateRemoteVideo) {
+    rotationScale.value = 1
+    return
+  }
+
+  const { clientWidth, clientHeight } = playerRoot.value
+
+  if (!clientWidth || !clientHeight) {
+    rotationScale.value = 1
+    return
+  }
+
+  rotationScale.value = Math.max(clientWidth / clientHeight, clientHeight / clientWidth)
+}
 
 const initTRTC = async () => {
   if (!props.credentials) {
@@ -92,11 +117,11 @@ const startRemoteVideo = async (userId: string) => {
   }
 
   try {
+    updateRotationScale()
+
     const videoElement = document.createElement('div')
     videoElement.id = `remote-video-${userId}`
-    videoElement.style.width = '100%'
-    videoElement.style.height = '100%'
-    videoElement.style.objectFit = 'contain'
+    videoElement.className = 'trtc-remote-view'
     videoContainer.value.innerHTML = ''
     videoContainer.value.appendChild(videoElement)
 
@@ -104,6 +129,10 @@ const startRemoteVideo = async (userId: string) => {
       userId,
       streamType: TRTC.TYPE.STREAM_TYPE_MAIN,
       view: videoElement,
+      option: {
+        fillMode: 'contain',
+        viewRoot: playerRoot.value ?? document.body,
+      },
     })
 
     console.log('Started remote video for user:', userId)
@@ -150,18 +179,29 @@ watch(
 )
 
 onMounted(() => {
+  updateRotationScale()
+
+  if (playerRoot.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => {
+      updateRotationScale()
+    })
+
+    resizeObserver.observe(playerRoot.value)
+  }
+
   if (props.credentials) {
     initTRTC()
   }
 })
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
   cleanup()
 })
 </script>
 
 <template>
-  <div class="trtc-player">
+  <div ref="playerRoot" class="trtc-player">
     <div v-if="isConnecting" class="trtc-status connecting">
       <div class="trtc-spinner"></div>
       <span>正在连接直播...</span>
@@ -182,7 +222,11 @@ onBeforeUnmount(() => {
     <div
       ref="videoContainer"
       class="trtc-video-container"
-      :class="{ hidden: !isConnected || !remoteUserId }"
+      :style="videoContainerStyle"
+      :class="{
+        hidden: !isConnected || !remoteUserId,
+        'trtc-video-container--rotated': forceRotateRemoteVideo,
+      }"
     ></div>
   </div>
 </template>
@@ -198,18 +242,41 @@ onBeforeUnmount(() => {
 }
 
 .trtc-video-container {
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .trtc-video-container.hidden {
   display: none;
 }
 
-.trtc-video-container :deep(video) {
+.trtc-video-container :deep(.trtc-remote-view) {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.trtc-video-container :deep(video),
+.trtc-video-container :deep(canvas) {
   width: 100% !important;
   height: 100% !important;
   object-fit: contain !important;
+}
+
+.trtc-video-container--rotated :deep(video),
+.trtc-video-container--rotated :deep(canvas) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: contain !important;
+  transform: translate(-50%, -50%) rotate(90deg) scale(var(--rotation-scale, 1));
+  transform-origin: center center;
 }
 
 .trtc-status {

@@ -130,6 +130,7 @@ const operationText = computed(() => deviceInfo.value?.latestStatus?.operation?.
 const reportTimeText = computed(() =>
   formatStatusTime(deviceInfo.value?.latestStatus?.receivedAt ?? deviceInfo.value?.latestStatus?.timestamp),
 )
+const liveReadyText = computed(() => (liveCredentials.value ? '已就绪' : '未获取'))
 
 const normalizeTimestamp = (value?: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -302,135 +303,385 @@ onBeforeUnmount(() => {
 <template>
   <MainLayout
     title="无人机操作界面"
-    subtitle="进入操作页后自动尝试拉起图传，左侧为图传画面接入区，右侧为设备操作与状态面板。"
+    subtitle="主画面优先，链路状态与设备信息统一收纳在右侧信息栏。"
   >
-    <div class="grid gap-4 2xl:grid-cols-[minmax(0,1.7fr)_380px]">
-      <section class="panel-card flex min-h-[620px] flex-col p-5">
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="text-2xl font-900 tracking-tight text-[#10233f]">{{ deviceName }}</div>
-            <div class="mt-2 text-sm text-[#6b7a90]">设备 ID：{{ deviceId }}</div>
-            <div class="mt-2 text-sm text-[#6b7a90]">控制器：{{ controllerModel }}</div>
-          </div>
-          <el-tag :type="onlineState ? 'success' : 'info'" effect="dark">
-            {{ onlineState ? '在线' : '离线' }}
-          </el-tag>
-        </div>
-
-        <div class="operation-video-shell mt-5 flex-1">
-          <TrtcPlayer :credentials="liveCredentials ?? null" @error="handleTrtcError" @connected="handleTrtcConnected" @disconnected="handleTrtcDisconnected" />
-        </div>
-      </section>
-
-      <aside class="flex flex-col gap-4">
-        <section class="panel-card p-5">
-          <div class="text-lg font-800 tracking-tight text-[#10233f]">图传状态</div>
-          <div class="mt-4 rounded-5 bg-[#f8fafc] p-4">
-            <div class="flex items-center justify-between gap-4">
-              <div class="text-sm text-[#6b7a90]">页面阶段</div>
-              <el-tag :type="liveStageTagTypeMap[liveStage]">
-                {{ liveStageLabelMap[liveStage] }}
+    <div class="operate-console">
+      <section class="panel-card console-toolbar p-4 md:p-5">
+        <div class="console-toolbar-content">
+          <div class="min-w-0">
+            <div class="console-kicker">Operate Console</div>
+            <div class="console-title-row">
+              <h2 class="console-title">{{ deviceName }}</h2>
+              <el-tag size="small" :type="onlineState ? 'success' : 'info'" effect="plain">
+                {{ onlineStatusText }}
               </el-tag>
-            </div>
-            <div class="mt-3 flex items-center justify-between gap-4">
-              <div class="text-sm text-[#6b7a90]">平台状态</div>
-              <el-tag :type="platformLiveStateTagType" effect="plain">
+              <el-tag size="small" :type="platformLiveStateTagType" effect="plain">
                 {{ platformLiveStateLabel }}
               </el-tag>
             </div>
-            <div class="mt-3 text-sm leading-6 text-[#516178]">{{ liveMessage }}</div>
-            <div class="mt-4 grid grid-cols-1 gap-2 text-sm text-[#516178]">
-              <div class="flex items-center justify-between rounded-4 bg-white px-3 py-2">
-                <span>请求 ID</span>
-                <strong class="text-[#10233f]">{{ requestIdText }}</strong>
-              </div>
-              <div class="flex items-center justify-between rounded-4 bg-white px-3 py-2">
-                <span>房间 ID</span>
-                <strong class="text-[#10233f]">{{ roomIdText }}</strong>
-              </div>
-              <div class="flex items-center justify-between rounded-4 bg-white px-3 py-2">
-                <span>设备确认</span>
-                <strong class="text-[#10233f]">{{ ackStatusLabel }}</strong>
-              </div>
+            <div class="console-meta">
+              <span>设备 ID：<strong>{{ deviceId }}</strong></span>
+              <span>控制器：<strong>{{ controllerModel }}</strong></span>
+              <span>当前任务：<strong>{{ operationText }}</strong></span>
+              <span>最近遥测：<strong>{{ reportTimeText }}</strong></span>
             </div>
           </div>
-        </section>
 
-        <section class="panel-card p-5">
-          <div class="text-lg font-800 tracking-tight text-[#10233f]">快捷操作</div>
-          <div class="mt-4 grid grid-cols-1 gap-3">
-            <el-button type="primary" :loading="initializing" @click="initializeLive">
-              重新拉起图传
-            </el-button>
-            <el-button type="warning" plain :disabled="!hasManagedSession" :loading="closing" @click="handleCloseLive()">
-              关闭观看会话
-            </el-button>
-            <el-button plain :loading="deviceLoading" @click="loadDeviceInfo">
-              刷新设备信息
+          <div class="toolbar-actions">
+            <el-button type="primary" :loading="initializing" @click="initializeLive">重新拉起图传</el-button>
+            <el-button plain :loading="deviceLoading" @click="loadDeviceInfo">刷新状态</el-button>
+            <el-button type="danger" plain :disabled="!hasManagedSession" :loading="closing" @click="handleCloseLive()">
+              关闭会话
             </el-button>
             <el-button @click="router.push({ name: 'dashboard' })">返回主页</el-button>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section class="panel-card p-5">
-          <div class="text-lg font-800 tracking-tight text-[#10233f]">设备信息</div>
-          <div class="mt-4 space-y-3">
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">无人机名称</div>
-              <div class="mt-1 text-base font-700 text-[#10233f]">{{ deviceName }}</div>
+      <div class="console-main">
+        <section class="panel-card stage-panel p-4 md:p-5">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">飞行主画面</div>
+              <div class="panel-note">固定播放舞台，避免因信息区内容变化影响视频区比例。</div>
             </div>
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">设备 ID</div>
-              <div class="mt-1 text-base font-700 text-[#10233f]">{{ deviceId }}</div>
+            <div class="panel-tags">
+              <el-tag size="small" effect="plain">房间 {{ roomIdText }}</el-tag>
+              <el-tag size="small" effect="plain">请求 {{ requestIdText }}</el-tag>
             </div>
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">平台链路状态</div>
-              <div class="mt-1 text-base font-700 text-[#10233f]">
-                {{ onlineStatusText }}
-              </div>
+          </div>
+
+          <div class="stage-canvas mt-4">
+            <div class="operation-video-shell">
+              <TrtcPlayer
+                :credentials="liveCredentials ?? null"
+                @error="handleTrtcError"
+                @connected="handleTrtcConnected"
+                @disconnected="handleTrtcDisconnected"
+              />
             </div>
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">凭据状态</div>
-              <div class="mt-1 text-base font-700 text-[#10233f]">{{ liveCredentials ? '已就绪' : '未获取' }}</div>
+          </div>
+
+          <div class="telemetry-strip mt-4">
+            <div class="metric-card">
+              <span>电量</span>
+              <strong>{{ batteryText }}</strong>
             </div>
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">拉流地址</div>
-              <div class="mt-1 break-all text-sm font-700 text-[#10233f]">{{ wsUrlText }}</div>
+            <div class="metric-card">
+              <span>速度</span>
+              <strong>{{ speedText }}</strong>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                <div class="text-sm text-[#6b7a90]">电量</div>
-                <div class="mt-1 text-base font-700 text-[#10233f]">{{ batteryText }}</div>
-              </div>
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                <div class="text-sm text-[#6b7a90]">速度</div>
-                <div class="mt-1 text-base font-700 text-[#10233f]">{{ speedText }}</div>
-              </div>
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                <div class="text-sm text-[#6b7a90]">高度</div>
-                <div class="mt-1 text-base font-700 text-[#10233f]">{{ altitudeText }}</div>
-              </div>
-              <div class="rounded-5 bg-[#f8fafc] p-4">
-                <div class="text-sm text-[#6b7a90]">当前任务</div>
-                <div class="mt-1 text-base font-700 text-[#10233f]">{{ operationText }}</div>
-              </div>
+            <div class="metric-card">
+              <span>高度</span>
+              <strong>{{ altitudeText }}</strong>
             </div>
-            <div class="rounded-5 bg-[#f8fafc] p-4">
-              <div class="text-sm text-[#6b7a90]">最近上报时间</div>
-              <div class="mt-1 text-base font-700 text-[#10233f]">{{ reportTimeText }}</div>
+            <div class="metric-card">
+              <span>设备确认</span>
+              <strong>{{ ackStatusLabel }}</strong>
             </div>
           </div>
         </section>
-      </aside>
+
+        <aside class="sidebar-stack">
+          <section class="panel-card info-panel p-4">
+            <div class="panel-title">直播状态</div>
+            <div class="info-list mt-4">
+              <div class="info-row">
+                <span>页面阶段</span>
+                <el-tag :type="liveStageTagTypeMap[liveStage]">{{ liveStageLabelMap[liveStage] }}</el-tag>
+              </div>
+              <div class="info-row">
+                <span>平台状态</span>
+                <el-tag :type="platformLiveStateTagType" effect="plain">{{ platformLiveStateLabel }}</el-tag>
+              </div>
+              <div class="info-row">
+                <span>凭据状态</span>
+                <strong>{{ liveReadyText }}</strong>
+              </div>
+            </div>
+            <div class="status-note mt-4">{{ liveMessage }}</div>
+          </section>
+
+          <section class="panel-card info-panel p-4">
+            <div class="panel-title">设备信息</div>
+            <el-descriptions class="info-descriptions mt-4" :column="1" border size="small">
+              <el-descriptions-item label="在线状态">
+                {{ onlineStatusText }}
+              </el-descriptions-item>
+              <el-descriptions-item label="无人机名称">
+                {{ deviceName }}
+              </el-descriptions-item>
+              <el-descriptions-item label="设备 ID">
+                {{ deviceId }}
+              </el-descriptions-item>
+              <el-descriptions-item label="控制器">
+                {{ controllerModel }}
+              </el-descriptions-item>
+            </el-descriptions>
+          </section>
+
+          <section class="panel-card info-panel p-4">
+            <div class="panel-title">链路详情</div>
+            <el-descriptions class="info-descriptions mt-4" :column="1" border size="small">
+              <el-descriptions-item label="房间 ID">
+                {{ roomIdText }}
+              </el-descriptions-item>
+              <el-descriptions-item label="请求 ID">
+                {{ requestIdText }}
+              </el-descriptions-item>
+              <el-descriptions-item label="设备确认">
+                {{ ackStatusLabel }}
+              </el-descriptions-item>
+              <el-descriptions-item label="拉流地址">
+                <span class="break-all">{{ wsUrlText }}</span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </section>
+        </aside>
+      </div>
     </div>
   </MainLayout>
 </template>
 
 <style scoped>
+.operate-console {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.console-toolbar {
+  border-color: #e5e7eb;
+}
+
+.console-toolbar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.console-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #909399;
+}
+
+.console-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+}
+
+.console-title {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.2vw, 1.95rem);
+  font-weight: 800;
+  line-height: 1.12;
+  color: #303133;
+}
+
+.console-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.85rem;
+  font-size: 0.9rem;
+  color: #606266;
+}
+
+.console-meta strong {
+  color: #303133;
+  font-weight: 600;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.console-main {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.stage-panel,
+.info-panel {
+  border-color: #e5e7eb;
+}
+
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.panel-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #303133;
+}
+
+.panel-note,
+.info-panel-note {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #909399;
+}
+
+.panel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.stage-canvas {
+  display: flex;
+  justify-content: center;
+}
+
 .operation-video-shell {
   position: relative;
+  width: min(100%, 1120px);
   overflow: hidden;
-  border-radius: 28px;
-  background: linear-gradient(135deg, #0f172a, #10233f);
+  border-radius: 16px;
+  border: 1px solid #111827;
+  background: #020617;
+  aspect-ratio: 16 / 9;
+  min-height: clamp(320px, 48vh, 560px);
+}
+
+.telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+
+.metric-card {
+  padding: 0.95rem 1rem;
+  border-radius: 12px;
+  background: #fafafa;
+  border: 1px solid #ebeef5;
+}
+
+.metric-card span {
+  display: block;
+  font-size: 0.8rem;
+  color: #909399;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 0.45rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 1.05rem;
+  color: #303133;
+}
+
+.sidebar-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid #ebeef5;
+  background: #fafafa;
+  color: #606266;
+  font-size: 0.9rem;
+}
+
+.info-row strong {
+  color: #303133;
+  font-weight: 600;
+}
+
+.status-note {
+  padding: 0.9rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid #ebeef5;
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.info-descriptions :deep(.el-descriptions__label) {
+  width: 96px;
+  color: #606266;
+}
+
+.info-descriptions :deep(.el-descriptions__content) {
+  color: #303133;
+  word-break: break-word;
+}
+
+.info-descriptions :deep(.el-descriptions__cell) {
+  font-size: 0.88rem;
+}
+
+@media (min-width: 1280px) {
+  .console-toolbar-content {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .console-main {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .console-main {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .telemetry-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions :deep(.el-button) {
+    flex: 1 1 calc(50% - 0.375rem);
+    min-width: 0;
+  }
+
+  .telemetry-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-video-shell {
+    min-height: 280px;
+  }
 }
 </style>
