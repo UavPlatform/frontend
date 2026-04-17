@@ -7,7 +7,8 @@ import TrtcPlayer from '../components/TrtcPlayer.vue'
 import { getStoredSession } from '../api/session'
 import { listAllUavs } from '../api/modules/uav'
 import { closeLive, getPullCredentials, requestStartLive } from '../api/modules/live'
-import type { LiveCredentials, LiveStartResponse, LiveState, UavItem } from '../types/uav'
+import { disconnectUavWs, initUavWs, offUavStatusUpdate, onUavStatusUpdate } from '../api/ws/modules/uav-ws'
+import type { LiveCredentials, LiveStartResponse, LiveState, UavItem, UavRuntimeStatus } from '../types/uav'
 
 const route = useRoute()
 const router = useRouter()
@@ -168,6 +169,20 @@ const updateDeviceInfo = (patch: Partial<UavItem>) => {
   }
 }
 
+const handleRealtimeStatusUpdate = (incomingDeviceId: string, status: UavRuntimeStatus) => {
+  if (!deviceId.value || incomingDeviceId !== deviceId.value) {
+    return
+  }
+
+  updateDeviceInfo({
+    isOnline: true,
+    latestStatus: {
+      ...status,
+      deviceId: incomingDeviceId,
+    },
+  })
+}
+
 const loadDeviceInfo = async () => {
   if (!deviceId.value) {
     return
@@ -289,11 +304,15 @@ const handleTrtcDisconnected = () => {
 }
 
 onMounted(() => {
+  onUavStatusUpdate(handleRealtimeStatusUpdate)
+  initUavWs()
   void loadDeviceInfo()
   void initializeLive()
 })
 
 onBeforeUnmount(() => {
+  offUavStatusUpdate(handleRealtimeStatusUpdate)
+  disconnectUavWs()
   if (hasManagedSession.value && !closing.value) {
     void handleCloseLive(true)
   }
@@ -343,7 +362,6 @@ onBeforeUnmount(() => {
           <div class="panel-header">
             <div>
               <div class="panel-title">飞行主画面</div>
-              <div class="panel-note">固定播放舞台，避免因信息区内容变化影响视频区比例。</div>
             </div>
             <div class="panel-tags">
               <el-tag size="small" effect="plain">房间 {{ roomIdText }}</el-tag>

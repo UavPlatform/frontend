@@ -198,6 +198,21 @@ const updateDeviceState = (deviceId: string, patch: Partial<UavItem>) => {
   }
 }
 
+const handleRealtimeStatusUpdate = (deviceId: string, status: UavRuntimeStatus) => {
+  const normalizedStatus: UavRuntimeStatus = {
+    ...status,
+    deviceId,
+  }
+
+  updateDeviceState(deviceId, {
+    isOnline: true,
+    latestStatus: normalizedStatus,
+  })
+
+  lastUpdatedAt.value = formatCurrentTime()
+  syncSelectedUav()
+}
+
 const canStartLive = (uav?: UavItem) =>
   Boolean(uav?.deviceId) && Boolean(uav?.isOnline) && uav?.isAvailable !== '0' && uav?.liveState !== 'STARTING' && uav?.liveState !== 'RUNNING'
 
@@ -339,7 +354,14 @@ const handleEnterSelectedOperate = () => {
 }
 
 onMounted(() => {
+  onUavStatusUpdate(handleRealtimeStatusUpdate)
+  initUavWs()
   void loadUavs()
+})
+
+onUnmounted(() => {
+  offUavStatusUpdate(handleRealtimeStatusUpdate)
+  disconnectUavWs()
 })
 </script>
 
