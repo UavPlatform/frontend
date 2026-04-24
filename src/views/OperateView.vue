@@ -349,6 +349,7 @@ onBeforeUnmount(() => {
           <div class="toolbar-actions">
             <el-button type="primary" :loading="initializing" @click="initializeLive">重新拉起图传</el-button>
             <el-button plain :loading="deviceLoading" @click="loadDeviceInfo">刷新状态</el-button>
+            <el-button @click="router.push({ name: 'route', query: { djiId: deviceId } })" type="success">航线规划</el-button>
             <el-button type="danger" plain :disabled="!hasManagedSession" :loading="closing" @click="handleCloseLive()">
               关闭会话
             </el-button>

@@ -245,7 +245,7 @@ onMounted(() => {
               </div>
             </div>
             <div class="log-container">
-              <pre class="log-content">{{ appLogs.join('\n') || '暂无日志' }}</pre>
+              <pre class="log-content">{{ Array.isArray(appLogs) ? appLogs.join('\n') : '暂无日志' }}</pre>
             </div>
           </div>
         </el-tab-pane>
@@ -260,7 +260,7 @@ onMounted(() => {
               </div>
             </div>
             <div class="log-container error">
-              <pre class="log-content">{{ errorLogs.join('\n') || '暂无错误日志' }}</pre>
+              <pre class="log-content">{{ Array.isArray(errorLogs) ? errorLogs.join('\n') : '暂无错误日志' }}</pre>
             </div>
           </div>
         </el-tab-pane>

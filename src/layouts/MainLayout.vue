@@ -9,6 +9,7 @@ import {
   SwitchButton,
   Warning,
   DocumentCopy,
+  Aim,
 } from '@element-plus/icons-vue'
 import { logout } from '../api/modules/auth'
 import { getStoredSession } from '../api/session'
@@ -22,13 +23,13 @@ const router = useRouter()
 const route = useRoute()
 
 const menuItems = computed(() => {
-  const baseItems = [
-    { label: '无人机总览', icon: Monitor, route: 'dashboard' },
-    { label: '历史记录', icon: DocumentCopy, route: 'records' },
-    { label: '飞行任务', icon: Operation, route: '' },
-    { label: '视频监控', icon: DataAnalysis, route: '' },
-    { label: '告警中心', icon: Warning, route: '' },
-  ]
+    const baseItems = [
+      { label: '无人机总览', icon: Monitor, route: 'dashboard' },
+      { label: '历史记录', icon: DocumentCopy, route: 'records' },
+      { label: '飞行任务', icon: Operation, route: '' },
+      { label: '视频监控', icon: DataAnalysis, route: '' },
+      { label: '告警中心', icon: Warning, route: '' },
+    ]
   
   const session = getStoredSession()
   const userRole = session?.user?.role
