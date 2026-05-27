@@ -4,9 +4,7 @@
     <div v-if="loading" class="loading">加载中...</div>
     <div v-if="error" class="error">{{ error }}</div>
 
-    <!-- 右侧控制面板 -->
     <div class="control-panel">
-      <!-- 航线信息表单 -->
       <div class="route-info">
         <h4>航线信息</h4>
         <label>航线名称</label>
@@ -24,7 +22,6 @@
         <textarea v-model="routeForm.description" rows="2" placeholder="可选"></textarea>
       </div>
 
-      <!-- 操作按钮 -->
       <div class="action-buttons">
         <button @click="startRoutePlanning" :disabled="planningActive" class="primary">
           {{ planningActive ? '规划中...' : '开始规划航线' }}
@@ -33,12 +30,14 @@
         <button @click="handleSaveRoute" :disabled="waypoints.length === 0 || saving">
           {{ saving ? '保存中...' : '保存航线' }}
         </button>
-        <button @click="handleExecuteRoute" :disabled="!routeId || !routeForm.djiId || executing" class="primary" style="background-color: #67c23a;">
+        <button @click="handleSaveAndOrder" :disabled="waypoints.length === 0 || savingAndOrder">
+          {{ savingAndOrder ? '保存中...' : '保存并下单' }}
+        </button>
+        <button @click="handleExecuteRoute" :disabled="!routeNum || !routeForm.djiId || executing" class="primary" style="background-color: #67c23a;">
           {{ executing ? '执行中...' : '执行航线' }}
         </button>
       </div>
 
-      <!-- 航点列表 -->
       <div class="points-list" v-if="waypoints.length > 0">
         <h4>航点列表</h4>
         <div v-for="wp in waypoints" :key="wp.id" class="point-item">
@@ -69,9 +68,9 @@
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import request from '../api/request'
 import { saveRoute, assignRoute } from '../api/modules/route'
 import { getStoredSession } from '../api/session'
+import request from '../api/request'
 
 const router = useRouter()
 
@@ -119,7 +118,8 @@ const planningActive = ref(false)
 let map: any = null
 const waypoints = ref<Waypoint[]>([])
 const saving = ref(false)
-const routeId = ref<number | null>(null)
+const savingAndOrder = ref(false)
+const routeNum = ref<string | null>(null)
 const executing = ref(false)
 
 onMounted(async () => {
@@ -305,18 +305,12 @@ async function handleSaveRoute() {
   saving.value = true
 
   try {
-    const response = await request.post<{ success: boolean; data?: { message?: string; id?: number }; message?: string }>('/route/save', routeDto)
-    if (response.data.success) {
-      const routeIdValue = response.data.data?.id
-      if (routeIdValue) {
-        routeId.value = routeIdValue
-        ElMessage.success('航线保存成功')
-      } else {
-        ElMessage.success('航线保存成功，但未获取到航线ID')
-      }
-      // 保留表单数据，以便执行航线
+    const result = await saveRoute(routeDto)
+    if (result.success && result.routeNum) {
+      routeNum.value = result.routeNum
+      ElMessage.success('航线保存成功')
     } else {
-      ElMessage.error(response.data.message || '保存失败')
+      ElMessage.error(result.message || '保存失败')
     }
   } catch (err) {
     console.error(err)
@@ -326,8 +320,15 @@ async function handleSaveRoute() {
   }
 }
 
+async function handleSaveAndOrder() {
+  await handleSaveRoute()
+  if (routeNum.value) {
+    router.push({ name: 'orders', query: { routeNum: routeNum.value } })
+  }
+}
+
 async function handleExecuteRoute() {
-  if (!routeId.value) {
+  if (!routeNum.value) {
     ElMessage.warning('请先保存航线')
     return
   }
@@ -339,7 +340,7 @@ async function handleExecuteRoute() {
   executing.value = true
 
   try {
-    const result = await assignRoute(routeId.value!, routeForm.djiId)
+    const result = await assignRoute(routeNum.value!)
     if (result.success) {
       ElMessage.success('航线执行成功')
       // 跳转到直播界面

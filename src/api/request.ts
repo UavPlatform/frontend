@@ -18,11 +18,24 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+const SPECIAL_APIS = ['/order/']
+
 request.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const body = error.response?.data
+    const url = error.config?.url || ''
+
+    if (status === 401) {
       clearStoredSession()
+    }
+
+    if (status && status >= 400 && status < 500 && body && typeof body.success === 'boolean') {
+      const isSpecialApi = SPECIAL_APIS.some(api => url.includes(api))
+      if (isSpecialApi) {
+        return Promise.resolve(error.response)
+      }
     }
 
     return Promise.reject(error)

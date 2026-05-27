@@ -35,6 +35,7 @@ const mapBackendUav = (item: BackendUavItem): UavItem => {
 }
 
 const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
+  const url = '/webUav/getUav'
   const response = await request.get<BackendUavListResponse>(url)
   const items = response.data.uav ?? []
   const filteredItems = onlyOnline ? items.filter((item) => item.wsConnected === true) : items
@@ -46,8 +47,6 @@ const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
     list: filteredItems.map((item) => mapBackendUav(item)),
   }
 }
-
-const url = '/webUav/getUav'
 
 export const listOnlineUavs = async (): Promise<UavListResult> => fetchUavList(true)
 
