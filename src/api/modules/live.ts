@@ -1,107 +1,80 @@
 import request from '../request'
+import { BizError } from './order'
 import type { LiveCredentials, LiveStartResponse, LiveState } from '../../types/uav'
-import axios, { type AxiosError } from 'axios'
 
-interface BackendErrorResponse {
-  success?: boolean
-  code?: string
-  message?: string
+interface ApiResponse<T> {
+  success: boolean
+  code: number
+  errorCode: string | null
+  message: string | null
+  data: T | null
 }
 
-interface LiveActionResponse {
-  success: boolean
-  code?: string
-  message?: string
+function unwrap<T>(response: { data: ApiResponse<T> }, fallbackMsg: string): T {
+  const body = response.data
+  if (!body.success || !body.data) {
+    throw new BizError(body.errorCode || 'UNKNOWN', body.message || fallbackMsg)
+  }
+  return body.data
+}
+
+interface StartLiveData {
   requestId?: string
   roomId?: string
   ackConfirmed?: boolean
   liveState?: LiveState
-}
-
-interface LiveCredentialsResponse extends LiveActionResponse {
-  roomId?: string
-  userId?: string
-  userSig?: string
-  sdkAppId?: number
-  wsUrl?: string
+  code?: string
 }
 
 export const requestStartLive = async (deviceId: string): Promise<LiveStartResponse> => {
-  try {
-    const response = await request.post<LiveActionResponse>('/live/req', null, {
-      params: { deviceId },
-    })
-
-    if (!response.data.success) {
-      throw new Error(response.data.message ?? '开播请求发送失败')
-    }
-
-    return {
-      success: true,
-      code: response.data.code,
-      message: response.data.message ?? '开播请求已发送',
-      roomId: response.data.roomId,
-      requestId: response.data.requestId,
-      ackConfirmed: response.data.ackConfirmed ?? false,
-      liveState: response.data.liveState,
-    }
-  } catch (error) {
-    throw new Error(extractBackendMessage(error, '开播请求发送失败'))
+  const response = await request.post<ApiResponse<StartLiveData>>('/live/req', null, {
+    params: { deviceId },
+  })
+  const data = unwrap(response, '开播请求发送失败')
+  return {
+    success: true,
+    code: data.code,
+    message: data.code === 'LIVE_ALREADY_RUNNING' ? '图传已在运行中' : '开播请求已发送',
+    roomId: data.roomId,
+    requestId: data.requestId,
+    ackConfirmed: data.ackConfirmed ?? false,
+    liveState: data.liveState,
   }
+}
+
+interface PullCredentialsData {
+  roomId: string
+  userId: string
+  userSig: string
+  sdkAppId: number
+  wsUrl: string
+  ackConfirmed?: boolean
+  liveState?: LiveState
 }
 
 export const getPullCredentials = async (
   deviceId: string,
   webUserId: string,
 ): Promise<LiveCredentials> => {
-  try {
-    const response = await request.post<LiveCredentialsResponse>('/live/get', null, {
-      params: { deviceId, webUserId },
-    })
-
-    if (!response.data.success || !response.data.roomId || !response.data.userId || !response.data.userSig || !response.data.sdkAppId) {
-      throw new Error(response.data.message ?? '拉流凭证生成失败')
-    }
-
-    return {
-      success: true,
-      roomId: response.data.roomId,
-      userId: response.data.userId,
-      userSig: response.data.userSig,
-      sdkAppId: response.data.sdkAppId,
-      wsUrl: response.data.wsUrl,
-      ackConfirmed: response.data.ackConfirmed ?? false,
-      liveState: response.data.liveState,
-    }
-  } catch (error) {
-    throw new Error(extractBackendMessage(error, '拉流凭证生成失败'))
+  const response = await request.post<ApiResponse<PullCredentialsData>>('/live/get', null, {
+    params: { deviceId, webUserId },
+  })
+  const data = unwrap(response, '拉流凭证生成失败')
+  return {
+    success: true,
+    roomId: data.roomId,
+    userId: data.userId,
+    userSig: data.userSig,
+    sdkAppId: data.sdkAppId,
+    wsUrl: data.wsUrl,
+    ackConfirmed: data.ackConfirmed ?? false,
+    liveState: data.liveState,
   }
 }
 
 export const closeLive = async (deviceId: string): Promise<void> => {
-  try {
-    const response = await request.post<LiveActionResponse>('/live/close', null, {
-      params: { deviceId },
-    })
-
-    if (!response.data.success) {
-      throw new Error(response.data.message ?? '关闭观看会话失败')
-    }
-  } catch (error) {
-    throw new Error(extractBackendMessage(error, '关闭观看会话失败'))
-  }
-}
-
-const extractBackendMessage = (error: unknown, fallback: string): string => {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<BackendErrorResponse>
-    const backendMessage = axiosError.response?.data?.message
-    if (typeof backendMessage === 'string' && backendMessage.trim()) {
-      return backendMessage
-    }
-  }
-  if (error instanceof Error && error.message.trim()) {
-    return error.message
-  }
-  return fallback
+  const response = await request.post<ApiResponse<null>>('/live/close', null, {
+    params: { deviceId },
+  })
+  unwrap(response, '关闭观看会话失败')
 }

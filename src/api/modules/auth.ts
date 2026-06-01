@@ -1,14 +1,28 @@
 import request from '../request'
 import { clearStoredSession, setStoredSession } from '../session'
+import { BizError } from './order'
 import type {
   AuthSession,
   LoginRequest,
-  LoginResponse,
   RegisterRequest,
-  RegisterResponse,
-  RefreshTokenResponse,
-  RecordsResponse,
+  UserRecord,
 } from '../../types/auth'
+
+interface ApiResponse<T> {
+  success: boolean
+  code: number
+  errorCode: string | null
+  message: string | null
+  data: T | null
+}
+
+function unwrap<T>(response: { data: ApiResponse<T> }, fallbackMsg: string): T {
+  const body = response.data
+  if (!body.success || !body.data) {
+    throw new BizError(body.errorCode || 'UNKNOWN', body.message || fallbackMsg)
+  }
+  return body.data
+}
 
 const buildSession = (payload: LoginRequest, token: string, refreshToken?: string): AuthSession => ({
   token,
@@ -26,79 +40,57 @@ export const logout = () => {
   clearStoredSession()
 }
 
+interface LoginData { token: string; refreshToken: string }
+
 export const login = async (payload: LoginRequest): Promise<AuthSession> => {
-  const response = (await request.post('/user/login', payload)) as { data: LoginResponse }
-
-  if (!response.data.success || !response.data.token) {
-    throw new Error(response.data.message ?? '登录失败')
-  }
-
-  const session = buildSession(payload, response.data.token, response.data.refreshToken)
+  const response = await request.post<ApiResponse<LoginData>>('/user/login', payload)
+  const data = unwrap(response, '登录失败')
+  const session = buildSession(payload, data.token, data.refreshToken)
   setStoredSession(session)
   return session
 }
 
+interface RegisterData { userId: number; userName: string }
+
 export const register = async (payload: RegisterRequest) => {
-  const response = (await request.post('/user/register', payload)) as {
-    data: RegisterResponse
-  }
-
-  if (!response.data.success || !response.data.userId) {
-    throw new Error(response.data.message ?? '注册失败')
-  }
-
-  return {
-    userId: response.data.userId,
-    userName: response.data.userName ?? payload.userName,
-  }
+  const response = await request.post<ApiResponse<RegisterData>>('/user/register', payload)
+  const data = unwrap(response, '注册失败')
+  return { userId: data.userId, userName: data.userName }
 }
+
+interface RefreshData { token: string }
 
 export const refreshAccessToken = async (refreshToken: string) => {
-  const response = (await request.post('/user/refresh', null, {
-    headers: {
-      'Refresh-Token': refreshToken,
-    },
-  })) as { data: RefreshTokenResponse }
-
-  if (!response.data.success || !response.data.token) {
-    throw new Error(response.data.message ?? '刷新令牌失败')
-  }
-
-  return response.data.token
+  const response = await request.post<ApiResponse<RefreshData>>('/user/refresh', null, {
+    headers: { 'Refresh-Token': refreshToken },
+  })
+  const data = unwrap(response, '刷新令牌失败')
+  return data.token
 }
 
+interface RecordsData { records: UserRecord[]; total: number; totalPages: number }
+
 export const getLiveRecords = async (page: number = 0, size: number = 10) => {
-  const response = (await request.get('/user/records', {
+  const response = await request.get<ApiResponse<RecordsData>>('/user/records', {
     params: { page, size }
-  })) as { data: RecordsResponse }
-
-  if (!response.data.success) {
-    throw new Error(response.data.message ?? '获取直播记录失败')
-  }
-
-  return response.data
+  })
+  return unwrap(response, '获取直播记录失败')
 }
 
 export const adminLogin = async (payload: { name: string; password: string }): Promise<AuthSession> => {
-  const response = (await request.post('/admin/login', payload)) as {
-    data: { success: boolean; data: { token: string; admin: { id: number; name: string; phoneNumber: string } }; message: string }
-  }
-
-  if (!response.data.success || !response.data.data?.token) {
-    throw new Error(response.data.message ?? '管理员登录失败')
-  }
+  const response = await request.post<ApiResponse<{ token: string; admin: { id: number; name: string; phoneNumber: string } }>>('/admin/login', payload)
+  const data = unwrap(response, '管理员登录失败')
 
   const session: AuthSession = {
-    token: response.data.data.token,
+    token: data.token,
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     user: {
-      username: response.data.data.admin.name,
-      displayName: response.data.data.admin.name,
+      username: data.admin.name,
+      displayName: data.admin.name,
       role: 'admin',
       teamName: 'UAV Admin Console',
     },
   }
-
   setStoredSession(session)
   return session
 }
