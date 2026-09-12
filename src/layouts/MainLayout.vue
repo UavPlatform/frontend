@@ -2,12 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  DataAnalysis,
   Monitor,
   Operation,
   Setting,
   SwitchButton,
-  Warning,
   DocumentCopy,
 } from '@element-plus/icons-vue'
 import { logout } from '../api/modules/auth'
@@ -21,29 +19,19 @@ defineProps<{
 const router = useRouter()
 const route = useRoute()
 
-const menuItems = computed(() => {
-    const baseItems = [
-      { label: '无人机总览', icon: Monitor, route: 'dashboard' },
-      { label: '历史记录', icon: DocumentCopy, route: 'records' },
-      { label: '飞行任务', icon: Operation, route: 'orders' },
-      { label: '视频监控', icon: DataAnalysis, route: '' },
-      { label: '告警中心', icon: Warning, route: '' },
-    ]
-  
-  const session = getStoredSession()
-  const userRole = session?.user?.role
-  
-  if (userRole === 'admin') {
-    baseItems.splice(2, 0, { label: '管理员中心', icon: Setting, route: 'admin' })
-  }
-  
-  return baseItems
-})
+// 1B-5b（Q6/Q7=A）：运营台收敛为管理员单入口——占位菜单（视频监控/告警中心）移除，
+// 航线规划入口随 RouteView 移除，「飞行任务」更名「任务/订单」
+const menuItems = [
+  { label: '无人机总览', icon: Monitor, route: 'dashboard' },
+  { label: '历史记录', icon: DocumentCopy, route: 'records' },
+  { label: '任务/订单', icon: Operation, route: 'orders' },
+  { label: '管理员中心', icon: Setting, route: 'admin-center' },
+]
 
-const userName = computed(() => getStoredSession()?.user.displayName ?? '值班管理员')
+const userName = computed(() => getStoredSession()?.user.displayName ?? '管理员')
 
 const getActiveItem = () => {
-  return menuItems.value.find(item => item.route === route.name)?.route || 'dashboard'
+  return menuItems.find(item => item.route === route.name)?.route || 'dashboard'
 }
 
 const activeRoute = ref(getActiveItem())
@@ -54,7 +42,7 @@ watch(() => route.name, () => {
 
 const handleLogout = () => {
   logout()
-  void router.replace({ name: 'login' })
+  void router.replace({ name: 'admin-login' })
 }
 </script>
 

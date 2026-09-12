@@ -44,10 +44,6 @@ const handleLogin = async () => {
     loginLoading.value = false
   }
 }
-
-const goToUserLogin = () => {
-  router.push({ name: 'login' })
-}
 </script>
 
 <template>
@@ -95,10 +91,7 @@ const goToUserLogin = () => {
       </el-form>
 
       <div class="login-footer">
-        <span class="text-gray-500">普通用户？</span>
-        <el-button type="primary" link @click="goToUserLogin">
-          用户登录入口
-        </el-button>
+        <span class="text-gray-500">飞翼通运营台 · 管理员专用入口</span>
       </div>
     </div>
   </div>
