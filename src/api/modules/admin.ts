@@ -21,7 +21,6 @@ export const adminLogin = async (data: AdminLoginRequest): Promise<{ success: bo
   if (response.data.success && response.data.data?.token && response.data.data?.admin) {
     setStoredSession({
       token: response.data.data.token,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       user: {
         id: response.data.data.admin.id,
         username: response.data.data.admin.name,
@@ -88,26 +87,36 @@ export const getLiveUavs = async (): Promise<LiveUav[]> => {
   return response.data.data
 }
 
+/** 后端 Result<LogVO>：{ success, code, errorCode, message, data: { logs } } */
+interface LogApiResponse {
+  success: boolean
+  code?: number
+  errorCode?: string | null
+  message?: string | null
+  data?: { logs?: string[] }
+}
+
+const parseLogs = (
+  response: { data: LogApiResponse },
+  fallbackMsg: string,
+): string[] => {
+  const body = response.data
+  if (!body.success || !body.data) {
+    throw new Error(body.message || fallbackMsg)
+  }
+  return body.data.logs ?? []
+}
+
 export const getApplicationLogs = async (lines: number = 100): Promise<string[]> => {
-  const response = await request.get<{ success: boolean; message: string; logs: string[] }>('/admin/logs/application', {
+  const response = await request.get<LogApiResponse>('/admin/logs/application', {
     params: { lines }
   })
-
-  if (!response.data.success) {
-    return []
-  }
-
-  return response.data.logs
+  return parseLogs(response, '获取应用日志失败')
 }
 
 export const getErrorLogs = async (lines: number = 100): Promise<string[]> => {
-  const response = await request.get<{ success: boolean; message: string; logs: string[] }>('/admin/logs/error', {
+  const response = await request.get<LogApiResponse>('/admin/logs/error', {
     params: { lines }
   })
-
-  if (!response.data.success) {
-    return []
-  }
-
-  return response.data.logs
+  return parseLogs(response, '获取错误日志失败')
 }

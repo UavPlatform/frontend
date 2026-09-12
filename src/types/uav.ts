@@ -34,6 +34,16 @@ export interface UavListResult {
   list: UavItem[]
 }
 
+/** GET /webUav/status 返回的单设备实时状态（WebUavStatusVo） */
+export interface UavDeviceStatus {
+  id?: number
+  uavName?: string
+  deviceId?: string
+  wsConnected: boolean
+  liveState?: LiveState
+  latestStatus?: UavRuntimeStatus | null
+}
+
 export type UavListMode = 'online' | 'all'
 
 export interface LiveStartResponse {

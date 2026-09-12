@@ -84,14 +84,14 @@ onMounted(() => {
           >
             <el-table-column prop="id" label="记录ID" width="100" />
             <el-table-column prop="djiId" label="无人机ID" />
-            <el-table-column prop="start_time" label="开始时间" width="200">
+            <el-table-column prop="startTime" label="开始时间" width="200">
               <template #default="scope">
-                {{ new Date(scope.row.start_time).toLocaleString() }}
+                {{ new Date(scope.row.startTime).toLocaleString() }}
               </template>
             </el-table-column>
-            <el-table-column prop="end_time" label="结束时间" width="200">
+            <el-table-column prop="endTime" label="结束时间" width="200">
               <template #default="scope">
-                {{ new Date(scope.row.end_time).toLocaleString() }}
+                {{ new Date(scope.row.endTime).toLocaleString() }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="120">
