@@ -40,7 +40,8 @@ export function initUavWs() {
     initialized = true
   }
 
-  ws.connect()
+  // connect 内部含异步预检/刷新，失败走退避重连，不阻塞调用方
+  void ws.connect()
 }
 
 export function disconnectUavWs() {

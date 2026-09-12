@@ -1,33 +1,5 @@
-export interface LoginRequest {
-  userName: string
-  password: string
-}
-
-export interface RegisterRequest {
-  userName: string
-  password: string
-}
-
-export interface LoginResponse {
-  success: boolean
-  token?: string
-  refreshToken?: string
-  message?: string
-}
-
-export interface RegisterResponse {
-  success: boolean
-  userId?: number
-  userName?: string
-  message?: string
-}
-
-export interface RefreshTokenResponse {
-  success: boolean
-  token?: string
-  message?: string
-}
-
+// 1B-5b（Q7=A）：普通用户登录/注册相关类型已随 LoginView 与 auth.ts login/register 移除；
+// 保留运营台会话与观看记录所需类型。
 export interface UserProfile {
   id?: number
   username: string
@@ -39,24 +11,12 @@ export interface UserProfile {
 export interface AuthSession {
   token: string
   refreshToken?: string
-  expiresAt: string
   user: UserProfile
 }
 
 export interface UserRecord {
   id: number
-  userName: string
   djiId: string
-  start_time: string
-  end_time: string
-}
-
-export interface RecordsResponse {
-  success: boolean
-  records: UserRecord[]
-  total: number
-  page: number
-  size: number
-  totalPages: number
-  message?: string
+  startTime: string
+  endTime: string
 }
