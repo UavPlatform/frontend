@@ -5,8 +5,8 @@ import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import TrtcPlayer from '../components/TrtcPlayer.vue'
 import { getStoredSession } from '../api/session'
-import { listAllUavs } from '../api/modules/uav'
-import { closeLive, getPullCredentials, requestStartLive } from '../api/modules/live'
+import { getUavStatus, listAllUavs } from '../api/modules/uav'
+import { closeLive, getPullCredentials, requestStartLive, watchLiveStop } from '../api/modules/live'
 import { disconnectUavWs, initUavWs, offUavStatusUpdate, onUavStatusUpdate } from '../api/ws/modules/uav-ws'
 import type { LiveCredentials, LiveStartResponse, LiveState, UavItem, UavRuntimeStatus } from '../types/uav'
 
@@ -202,6 +202,39 @@ const loadDeviceInfo = async () => {
     }
   } catch (error) {
     console.error(error)
+  }
+
+  // 列表 VO 不含在线状态，改用单设备状态接口补齐 wsConnected / liveState / latestStatus
+  try {
+    const status = await getUavStatus(deviceId.value)
+
+    if (deviceInfo.value) {
+      const patch: Partial<UavItem> = { isOnline: status.wsConnected }
+
+      if (status.latestStatus) {
+        patch.latestStatus = status.latestStatus
+      }
+
+      const managedLiveState = liveCredentials.value?.liveState ?? liveRequest.value?.liveState
+      if (managedLiveState) {
+        patch.liveState = managedLiveState
+      } else if (status.liveState) {
+        patch.liveState = status.liveState
+      }
+
+      updateDeviceInfo(patch)
+    } else {
+      deviceInfo.value = {
+        id: status.id ?? 0,
+        uavName: status.uavName ?? `无人机 ${deviceId.value}`,
+        deviceId: status.deviceId ?? deviceId.value,
+        isOnline: status.wsConnected,
+        liveState: status.liveState,
+        latestStatus: status.latestStatus ?? null,
+      }
+    }
+  } catch (error) {
+    console.warn('[operate] 加载设备在线状态失败', error)
   } finally {
     deviceLoading.value = false
   }
@@ -213,34 +246,77 @@ const handleCloseLive = async (silent: boolean = false) => {
   }
 
   closing.value = true
+  const targetDeviceId = deviceId.value
 
   if (!silent) {
     liveStage.value = 'closing'
-    liveMessage.value = '正在关闭观看会话...'
+    liveMessage.value = '正在结束观看并停止推流...'
   }
 
   try {
-    await closeLive(deviceId.value)
+    const outcome = await closeLive(targetDeviceId)
+    // t12：任何分支发起方观看记录都已关闭，本地观看会话一并清除
     liveRequest.value = undefined
     liveCredentials.value = undefined
-    updateDeviceInfo({ liveState: 'IDLE' })
-    liveStage.value = 'closed'
-    liveMessage.value = '观看会话已关闭。'
 
+    if (outcome.settled) {
+      updateDeviceInfo({ liveState: 'IDLE' })
+    }
+
+    liveStage.value = 'closed'
+    liveMessage.value = `${outcome.message}。`
     if (!silent) {
-      ElMessage.success('观看会话已关闭')
+      ElMessage.success(outcome.message)
+    }
+
+    if (!outcome.settled && !silent) {
+      // 「等待设备确认」分支：轮询平台直播态，设备上报 LIVE_STOPPED 后 liveState → IDLE
+      void watchLiveStop(targetDeviceId, (status) => {
+        if (deviceId.value !== targetDeviceId) {
+          return
+        }
+        const patch: Partial<UavItem> = {
+          isOnline: status.wsConnected,
+          liveState: status.liveState ?? 'IDLE',
+        }
+        if (status.latestStatus) {
+          patch.latestStatus = status.latestStatus
+        }
+        updateDeviceInfo(patch)
+      })
     }
   } catch (error) {
     console.error(error)
+    // 409 LIVE_STOP_REJECTED / 404 设备未注册等：观看记录同样已关闭，本地会话清除
+    liveRequest.value = undefined
+    liveCredentials.value = undefined
 
     if (!silent) {
       liveStage.value = 'error'
-      liveMessage.value = error instanceof Error ? error.message : '关闭观看会话失败'
+      liveMessage.value = error instanceof Error ? error.message : '结束观看失败'
       ElMessage.error(liveMessage.value)
+    }
+
+    if (!silent) {
+      // 回读平台态，让 UI 反映设备真实直播状态（如拒绝停止时仍为直播中）
+      try {
+        const status = await getUavStatus(targetDeviceId)
+        if (deviceId.value === targetDeviceId) {
+          const patch: Partial<UavItem> = {
+            isOnline: status.wsConnected,
+            liveState: status.liveState ?? 'IDLE',
+          }
+          if (status.latestStatus) {
+            patch.latestStatus = status.latestStatus
+          }
+          updateDeviceInfo(patch)
+        }
+      } catch {
+        // 设备状态不可得，保持当前 UI 态
+      }
     }
   } finally {
     closing.value = false
-    void loadDeviceInfo()
   }
 }
 

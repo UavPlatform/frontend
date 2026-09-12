@@ -4,10 +4,10 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import OnlineUavTable from '../components/dashboard/OnlineUavTable.vue'
-import { listAllUavs, listOnlineUavs } from '../api/modules/uav'
-import { requestStartLive } from '../api/modules/live'
+import { getUavStatus, listAllUavs, listOnlineUavs } from '../api/modules/uav'
+import { closeLive, requestStartLive, watchLiveStop } from '../api/modules/live'
 import { initUavWs, disconnectUavWs, onUavStatusUpdate, offUavStatusUpdate } from '../api/ws/modules/uav-ws'
-import type { UavItem, UavListMode, UavRuntimeStatus } from '../types/uav'
+import type { UavDeviceStatus, UavItem, UavListMode, UavRuntimeStatus } from '../types/uav'
 
 const router = useRouter()
 
@@ -22,7 +22,7 @@ const loading = ref(false)
 const allUavs = ref<UavItem[]>([])
 const onlineUavs = ref<UavItem[]>([])
 const selectedUav = ref<UavItem>()
-const pendingAction = ref<'start-live'>()
+const pendingAction = ref<'start-live' | 'stop-live'>()
 const pendingDeviceId = ref('')
 const lastUpdatedAt = ref('--:--:--')
 
@@ -216,6 +216,9 @@ const handleRealtimeStatusUpdate = (deviceId: string, status: UavRuntimeStatus) 
 const canStartLive = (uav?: UavItem) =>
   Boolean(uav?.deviceId) && Boolean(uav?.isOnline) && uav?.isAvailable !== '0' && uav?.liveState !== 'STARTING' && uav?.liveState !== 'RUNNING'
 
+const canStopLive = (uav?: UavItem) =>
+  Boolean(uav?.deviceId) && (uav?.liveState === 'RUNNING' || uav?.liveState === 'STARTING')
+
 const getStartLiveLabel = (uav?: UavItem) => {
   if (uav?.liveState === 'RUNNING') {
     return '直播中'
@@ -264,6 +267,7 @@ const loadUavs = async () => {
 
     lastUpdatedAt.value = formatCurrentTime()
     syncSelectedUav()
+    void refreshSelectedStatus()
 
     if (onlineResult.message && onlineResult.list.length === 0 && viewMode.value === 'online') {
       ElMessage.info(onlineResult.message)
@@ -287,8 +291,38 @@ const handleReset = () => {
   syncSelectedUav()
 }
 
+const applyDeviceStatus = (targetDeviceId: string, status: UavDeviceStatus) => {
+  const patch: Partial<UavItem> = {
+    isOnline: status.wsConnected,
+    liveState: status.liveState ?? 'IDLE',
+  }
+  if (status.latestStatus) {
+    patch.latestStatus = status.latestStatus
+  }
+  updateDeviceState(targetDeviceId, patch)
+  lastUpdatedAt.value = formatCurrentTime()
+  syncSelectedUav()
+}
+
+const refreshSelectedStatus = async () => {
+  const target = selectedUav.value?.deviceId
+  if (!target) {
+    return
+  }
+
+  try {
+    const status = await getUavStatus(target)
+    if (selectedUav.value?.deviceId === target) {
+      applyDeviceStatus(target, status)
+    }
+  } catch {
+    // 单设备状态不可得（未注册/离线），保持列表现状
+  }
+}
+
 const handleSelect = (uav: UavItem) => {
   selectedUav.value = uav
+  void refreshSelectedStatus()
 }
 
 const handleStartLive = async (deviceId: string) => {
@@ -309,6 +343,52 @@ const handleStartLive = async (deviceId: string) => {
     pendingAction.value = undefined
     pendingDeviceId.value = ''
   }
+}
+
+const handleStopLive = async (target: string) => {
+  pendingAction.value = 'stop-live'
+  pendingDeviceId.value = target
+
+  try {
+    // 运营端结束观看 = 触发后端 STOP_LIVE 链路（1A-5a/5c）
+    const outcome = await closeLive(target)
+
+    if (outcome.settled) {
+      updateDeviceState(target, { liveState: 'IDLE' })
+      lastUpdatedAt.value = formatCurrentTime()
+      syncSelectedUav()
+    }
+    ElMessage.success(outcome.message)
+
+    if (!outcome.settled) {
+      // 「等待设备确认」分支：轮询平台直播态，设备上报 LIVE_STOPPED 后 liveState → IDLE
+      void watchLiveStop(target, (status) => {
+        applyDeviceStatus(target, status)
+      })
+    }
+  } catch (error) {
+    console.error(error)
+    // 409 LIVE_STOP_REJECTED / 404 设备未注册等分支：回读平台态，保证 UI 反映真实直播状态
+    ElMessage.error(error instanceof Error ? error.message : '结束观看失败')
+
+    try {
+      const status = await getUavStatus(target)
+      applyDeviceStatus(target, status)
+    } catch {
+      // 设备状态不可得，保持当前 UI 态
+    }
+  } finally {
+    pendingAction.value = undefined
+    pendingDeviceId.value = ''
+  }
+}
+
+const handleStopSelectedLive = () => {
+  if (!selectedUav.value?.deviceId) {
+    return
+  }
+
+  void handleStopLive(selectedUav.value.deviceId)
 }
 
 const handleStartSelectedLive = () => {
@@ -496,6 +576,15 @@ onUnmounted(() => {
                   @click="handleStartSelectedLive"
                 >
                   {{ getStartLiveLabel(selectedUav) }}
+                </el-button>
+                <el-button
+                  v-if="canStopLive(selectedUav)"
+                  type="danger"
+                  plain
+                  :loading="pendingAction === 'stop-live' && pendingDeviceId === selectedUav.deviceId"
+                  @click="handleStopSelectedLive"
+                >
+                  结束观看
                 </el-button>
                 <el-button type="success" plain @click="handleEnterSelectedOperate">
                   进入操作

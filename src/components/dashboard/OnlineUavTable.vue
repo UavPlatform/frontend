@@ -8,7 +8,7 @@ const props = defineProps<{
   page: number
   pageSize: number
   activeUavId?: number
-  pendingAction?: 'start-live'
+  pendingAction?: 'start-live' | 'stop-live'
   pendingDeviceId?: string
 }>()
 
