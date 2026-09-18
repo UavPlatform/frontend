@@ -1,97 +1,29 @@
-export interface UavDetail {
-  id: number
-  uavName: string
-  djiId: string
-  isAvailable: string
-  lastActiveTime: string
-  onlineStatus?: string
-  uavCreateTime?: string
-  controllerModel?: string
-}
+import type { Schemas } from '../api/contract'
 
-export interface LiveUav {
-  deviceId: string
-  uavName: string
-  roomId: string
-  requestId: string
-  updatedAt: number
-  onlineStatus: string
-  isAvailable: string
-}
+// 管理端视图模型：字段一律来自 OpenAPI 契约生成的 Schemas，禁止手写重复声明。
 
-export interface AdminStatistics {
-  totalUavs: number
-  onlineUavs: number
-  availableUavs: number
-  liveUavs: number
-  offlineUavs: number
-  unavailableUavs: number
-  totalUsers: number
-}
+/** 契约 Uav：GET /admin/uav 列表项 */
+export type UavDetail = Schemas['Uav']
 
-export interface AdminLoginRequest {
-  name: string
-  password: string
-}
+/** 契约 LiveUavVO：GET /admin/uav/live */
+export type LiveUav = Schemas['LiveUavVO']
 
-export interface AdminLoginResponse {
-  success: boolean
-  message: string
-  token?: string
-  user?: {
-    id: number
-    name: string
-    role: string
-  }
-}
+/** 契约 AdminStatisticsVO：GET /admin/uav/statistics */
+export type AdminStatistics = Schemas['AdminStatisticsVO']
 
-/** t25 管理端分页信封：page 从 0 起 */
-export interface AdminPageVo<T> {
+/** 契约 AdminDto：POST /admin/login 请求体 */
+export type AdminLoginRequest = Schemas['AdminDto']
+
+/** 契约 AdminLoginVO：POST /admin/login 的 data */
+export type AdminLoginResult = Schemas['AdminLoginVO']
+
+/** 契约 AdminOrderVo：GET /admin/orders、/admin/orders/{orderNum} */
+export type AdminOrderVo = Schemas['AdminOrderVo']
+
+/** 契约 AdminTaskVo：GET /admin/tasks、/admin/tasks/{taskNum} */
+export type AdminTaskVo = Schemas['AdminTaskVo']
+
+/** 契约分页信封：后端按泛型实例化成多个 schema，前端用映射类型收敛为一个泛型 */
+export type AdminPageVo<T> = Omit<Schemas['AdminPageVoAdminOrderVo'], 'content'> & {
   content: T[]
-  page: number
-  size: number
-  totalElements: number
-  totalPages: number
-}
-
-/** GET /admin/orders、/admin/orders/{orderNum}（t25 AdminOrderVo） */
-export interface AdminOrderVo {
-  orderNum: string
-  userId: number
-  ownerName: string
-  taskNum: string
-  taskName: string
-  totalAmount: number
-  totalDistance: number
-  /** 0 PENDING / 1 PAID / 2 CANCELLED / 3 REFUNDED / 4 COMPLETED / 5 WAITING_CONFIRM（C5） */
-  orderStatusCode: number
-  orderStatus: string
-  orderStatusDesc: string
-  createTime: string
-  updateTime: string
-}
-
-/** GET /admin/tasks、/admin/tasks/{taskNum}（t25 AdminTaskVo） */
-export interface AdminTaskVo {
-  id: number
-  taskNum: string
-  taskName: string
-  userId: number
-  ownerName: string
-  taskStatus: string
-  taskStatusDesc: string
-  taskTime: string
-  reward: number
-  description: string
-  orderNum: string
-  orderStatusCode: number
-  orderStatus: string
-  orderStatusDesc: string
-  totalAmount: number
-  totalDistance: number
-  riderName: string
-  completeNote: string
-  actionHint: string
-  createTime: string
-  updateTime: string
 }

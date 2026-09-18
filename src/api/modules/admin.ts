@@ -1,46 +1,37 @@
-import request from '../request'
+import { apiGet, apiPost, expectData } from '../contract'
 import type { AdminLoginRequest, AdminStatistics, LiveUav, UavDetail } from '../../types/admin'
 import { setStoredSession } from '../session'
 
-interface AdminLoginApiResponse {
-  success: boolean
-  message: string
-  data?: {
-    token: string
-    admin: {
-      id: number
-      name: string
-      phoneNumber?: string
-    }
-  }
-}
+// 管理端接口。请求/响应结构一律来自 OpenAPI 契约（src/api/contract.ts），不再手写信封与字段。
 
 export const adminLogin = async (data: AdminLoginRequest): Promise<{ success: boolean; message: string }> => {
-  const response = await request.post<AdminLoginApiResponse>('/admin/login', data)
+  // 契约：POST /admin/login（body=AdminDto）→ Result<AdminLoginVO>
+  const body = await apiPost('/admin/login', { body: data })
 
-  if (response.data.success && response.data.data?.token && response.data.data?.admin) {
+  if (body.success && body.data?.token && body.data.admin) {
     setStoredSession({
-      token: response.data.data.token,
+      token: body.data.token,
       user: {
-        id: response.data.data.admin.id,
-        username: response.data.data.admin.name,
-        displayName: response.data.data.admin.name,
+        id: body.data.admin.id ?? 0,
+        username: body.data.admin.name ?? '',
+        displayName: body.data.admin.name ?? '',
         role: 'ADMIN',
-        teamName: 'Admin'
-      }
+        teamName: 'Admin',
+      },
     })
   }
 
   return {
-    success: response.data.success,
-    message: response.data.message
+    success: body.success ?? false,
+    message: body.message ?? '',
   }
 }
 
 export const getAdminStatistics = async (): Promise<AdminStatistics> => {
-  const response = await request.get<{ success: boolean; data: AdminStatistics }>('/admin/uav/statistics')
+  // 契约：GET /admin/uav/statistics → Result<AdminStatisticsVO>
+  const body = await apiGet('/admin/uav/statistics')
 
-  if (!response.data.success || !response.data.data) {
+  if (!body.success || !body.data) {
     return {
       totalUavs: 0,
       onlineUavs: 0,
@@ -48,75 +39,59 @@ export const getAdminStatistics = async (): Promise<AdminStatistics> => {
       liveUavs: 0,
       offlineUavs: 0,
       unavailableUavs: 0,
-      totalUsers: 0
+      totalUsers: 0,
     }
   }
 
-  return response.data.data
+  return body.data
 }
 
 export const getAllUavs = async (): Promise<UavDetail[]> => {
-  const response = await request.get<{ success: boolean; data?: UavDetail[]; message?: string }>('/admin/uav')
+  // 契约：GET /admin/uav → Result<List<Uav>>
+  const body = await apiGet('/admin/uav')
 
-  if (!response.data.success || !response.data.data) {
+  if (!body.success || !body.data) {
     return []
   }
 
-  return response.data.data
+  return body.data
 }
 
 export const updateUavAvailable = async (deviceId: string, isAvailable: '0' | '1') => {
-  const response = await request.post<{ success: boolean; message: string }>('/admin/uav/available', null, {
-    params: { deviceId, isAvailable }
-  })
+  // 契约：POST /admin/uav/available?deviceId=…&isAvailable=… → Result<Void>
+  const body = await apiPost('/admin/uav/available', { params: { deviceId, isAvailable } })
 
-  if (!response.data.success) {
-    throw new Error(response.data.message ?? '修改无人机可用状态失败')
+  if (!body.success) {
+    throw new Error(body.message ?? '修改无人机可用状态失败')
   }
 
-  return response.data
+  return { success: true, message: body.message ?? '' }
 }
 
 export const getLiveUavs = async (): Promise<LiveUav[]> => {
-  const response = await request.get<{ success: boolean; data?: LiveUav[]; message?: string }>('/admin/uav/live')
+  // 契约：GET /admin/uav/live → Result<List<LiveUavVO>>
+  const body = await apiGet('/admin/uav/live')
 
-  if (!response.data.success || !response.data.data) {
+  if (!body.success || !body.data) {
     return []
   }
 
-  return response.data.data
+  return body.data
 }
 
-/** 后端 Result<LogVO>：{ success, code, errorCode, message, data: { logs } } */
-interface LogApiResponse {
-  success: boolean
-  code?: number
-  errorCode?: string | null
-  message?: string | null
-  data?: { logs?: string[] }
-}
+// 两个日志端点各自成函数（而不是共享一个「路径当参数」的 helper）：
+// 端点字面量必须出现在调用点，消费侧门禁才能机器核对「登记表 ↔ 代码」一致。
 
-const parseLogs = (
-  response: { data: LogApiResponse },
-  fallbackMsg: string,
-): string[] => {
-  const body = response.data
-  if (!body.success || !body.data) {
-    throw new Error(body.message || fallbackMsg)
-  }
-  return body.data.logs ?? []
-}
-
+/** GET /admin/logs/application → Result<LogVO>：data.logs 为日志行 */
 export const getApplicationLogs = async (lines: number = 100): Promise<string[]> => {
-  const response = await request.get<LogApiResponse>('/admin/logs/application', {
-    params: { lines }
-  })
-  return parseLogs(response, '获取应用日志失败')
+  const body = await apiGet('/admin/logs/application', { params: { lines } })
+  const data = expectData(body, '获取应用日志失败')
+  return data.logs ?? []
 }
 
+/** GET /admin/logs/error → Result<LogVO>：data.logs 为日志行 */
 export const getErrorLogs = async (lines: number = 100): Promise<string[]> => {
-  const response = await request.get<LogApiResponse>('/admin/logs/error', {
-    params: { lines }
-  })
-  return parseLogs(response, '获取错误日志失败')
+  const body = await apiGet('/admin/logs/error', { params: { lines } })
+  const data = expectData(body, '获取错误日志失败')
+  return data.logs ?? []
 }

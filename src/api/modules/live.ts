@@ -1,37 +1,14 @@
-import request from '../request'
+import { apiPost, expectData } from '../contract'
 import { BizError } from './order'
 import { getUavStatus } from './uav'
-import type { LiveCredentials, LiveStartResponse, LiveState, UavDeviceStatus } from '../../types/uav'
-
-interface ApiResponse<T> {
-  success: boolean
-  code: number
-  errorCode: string | null
-  message: string | null
-  data: T | null
-}
-
-function unwrap<T>(response: { data: ApiResponse<T> }, fallbackMsg: string): T {
-  const body = response.data
-  if (!body.success || !body.data) {
-    throw new BizError(body.errorCode || 'UNKNOWN', body.message || fallbackMsg)
-  }
-  return body.data
-}
-
-interface StartLiveData {
-  requestId?: string
-  roomId?: string
-  ackConfirmed?: boolean
-  liveState?: LiveState
-  code?: string
-}
+import { toLiveState } from '../../types/uav'
+import type { LiveCredentials, LiveStartResponse, UavDeviceStatus } from '../../types/uav'
 
 export const requestStartLive = async (deviceId: string): Promise<LiveStartResponse> => {
-  const response = await request.post<ApiResponse<StartLiveData>>('/live/req', null, {
-    params: { deviceId },
-  })
-  const data = unwrap(response, '开播请求发送失败')
+  // 契约：POST /live/req?deviceId=… → Result<LiveStartVO>
+  const body = await apiPost('/live/req', { params: { deviceId } })
+  const data = expectData(body, '开播请求发送失败')
+
   return {
     success: true,
     code: data.code,
@@ -39,37 +16,29 @@ export const requestStartLive = async (deviceId: string): Promise<LiveStartRespo
     roomId: data.roomId,
     requestId: data.requestId,
     ackConfirmed: data.ackConfirmed ?? false,
-    liveState: data.liveState,
+    liveState: toLiveState(data.liveState),
   }
-}
-
-interface PullCredentialsData {
-  roomId: string
-  userId: string
-  userSig: string
-  sdkAppId: number
-  wsUrl: string
-  ackConfirmed?: boolean
-  liveState?: LiveState
 }
 
 export const getPullCredentials = async (
   deviceId: string,
   webUserId: string,
 ): Promise<LiveCredentials> => {
-  const response = await request.post<ApiResponse<PullCredentialsData>>('/live/get', null, {
-    params: { deviceId, webUserId },
-  })
-  const data = unwrap(response, '拉流凭证生成失败')
+  // 契约：POST /live/get?deviceId=…&webUserId=… → Result<PullCredentialsVO>
+  // webUserId 仅用于本地日志/占位；TRTC 身份由服务端从登录态生成（客户端不可指定）。
+  void webUserId
+  const body = await apiPost('/live/get', { params: { deviceId } })
+  const data = expectData(body, '拉流凭证生成失败')
+
   return {
     success: true,
-    roomId: data.roomId,
-    userId: data.userId,
-    userSig: data.userSig,
-    sdkAppId: data.sdkAppId,
+    roomId: data.roomId ?? '',
+    userId: data.userId ?? '',
+    userSig: data.userSig ?? '',
+    sdkAppId: data.sdkAppId ?? 0,
     wsUrl: data.wsUrl,
     ackConfirmed: data.ackConfirmed ?? false,
-    liveState: data.liveState,
+    liveState: toLiveState(data.liveState),
   }
 }
 
@@ -81,10 +50,8 @@ export interface LiveStopOutcome {
 }
 
 export const closeLive = async (deviceId: string): Promise<LiveStopOutcome> => {
-  const response = await request.post<ApiResponse<null>>('/live/close', null, {
-    params: { deviceId },
-  })
-  const body = response.data
+  // 契约：POST /live/close?deviceId=… → Result<Void>（data 恒为 null，靠 message 区分分支）
+  const body = await apiPost('/live/close', { params: { deviceId } })
   if (!body.success) {
     // 409 LIVE_STOP_REJECTED（设备拒绝）/ 404 设备未注册等业务分支
     throw new BizError(body.errorCode || 'LIVE_STOP_FAILED', body.message || '结束观看失败')

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { clearStoredSession, getStoredSession, setStoredSession } from './session'
+import type { OkBody } from './contract'
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || '/api'
 
@@ -18,11 +19,8 @@ const rawRequest = axios.create({
 // → 成功则原地更新会话并重放原请求（重放时 request 拦截器从会话注入新 token）；
 //   失败（无 refreshToken / 刷新 401「无效的刷新令牌」/ 网络失败）→ 清会话并跳登录页。
 
-interface RefreshApiResponse {
-  success: boolean
-  message?: string | null
-  data?: { token?: string } | null
-}
+/** POST /user/refresh 的 200 响应信封（类型来自 openapi 契约，不再手写） */
+type RefreshApiResponse = OkBody<'/user/refresh', 'post'>
 
 const doRefreshAccessToken = async (): Promise<string | null> => {
   const session = getStoredSession()

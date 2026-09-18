@@ -73,6 +73,12 @@ const loadErrorLogs = async () => {
 }
 
 const handleToggleAvailable = async (uav: UavDetail) => {
+  // 契约里 djiId 可空：没有设备ID 无法定位设备，直接给出提示而不是发一个空请求
+  if (!uav.djiId) {
+    ElMessage.warning('该设备缺少 DJI 设备ID，无法修改可用状态')
+    return
+  }
+
   const newStatus = uav.isAvailable === '1' ? '0' : '1'
   try {
     await updateUavAvailable(uav.djiId, newStatus)

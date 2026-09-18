@@ -53,7 +53,7 @@ const loadOrders = async () => {
       taskNum: orderQuery.taskNum.trim() || undefined,
     })
     orders.value = data.content
-    orderTotal.value = data.totalElements
+    orderTotal.value = data.totalElements ?? 0
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : '加载订单失败')
   } finally {
@@ -86,10 +86,12 @@ const handleOrderSizeChange = (size: number) => {
 }
 
 const orderStatusTagType = (vo: AdminOrderVo) =>
-  ORDER_STATUS_META[vo.orderStatusCode]?.tagType ?? 'info'
+  ORDER_STATUS_META[vo.orderStatusCode ?? -1]?.tagType ?? 'info'
 
 const orderStatusLabel = (vo: AdminOrderVo) =>
-  vo.orderStatusDesc || ORDER_STATUS_META[vo.orderStatusCode]?.label || String(vo.orderStatusCode)
+  vo.orderStatusDesc ||
+  ORDER_STATUS_META[vo.orderStatusCode ?? -1]?.label ||
+  String(vo.orderStatusCode ?? '--')
 
 const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
 
@@ -101,6 +103,12 @@ const orderDetailLoading = ref(false)
 const orderDetail = ref<AdminOrderVo>()
 
 const openOrderDetail = async (row: AdminOrderVo) => {
+  // 契约里 orderNum 可空（历史数据/异常行），没有订单号就不发请求
+  if (!row.orderNum) {
+    ElMessage.warning('该订单缺少订单号，无法查看详情')
+    return
+  }
+
   orderDetailVisible.value = true
   orderDetailLoading.value = true
   orderDetail.value = undefined
@@ -140,7 +148,7 @@ const loadTasks = async () => {
       taskNum: taskQuery.taskNum.trim() || undefined,
     })
     tasks.value = data.content
-    taskTotal.value = data.totalElements
+    taskTotal.value = data.totalElements ?? 0
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : '加载任务失败')
   } finally {
@@ -172,10 +180,10 @@ const handleTaskSizeChange = (size: number) => {
 }
 
 const taskStatusTagType = (vo: AdminTaskVo) =>
-  TASK_STATUS_META[vo.taskStatus]?.tagType ?? 'info'
+  TASK_STATUS_META[vo.taskStatus ?? '']?.tagType ?? 'info'
 
 const taskStatusLabel = (vo: AdminTaskVo) =>
-  vo.taskStatusDesc || TASK_STATUS_META[vo.taskStatus]?.label || vo.taskStatus
+  vo.taskStatusDesc || TASK_STATUS_META[vo.taskStatus ?? '']?.label || vo.taskStatus
 
 // ==================== 任务详情 ====================
 const taskDetailVisible = ref(false)
@@ -183,6 +191,12 @@ const taskDetailLoading = ref(false)
 const taskDetail = ref<AdminTaskVo>()
 
 const openTaskDetail = async (row: AdminTaskVo) => {
+  // 契约里 taskNum 可空，没有任务号就不发请求
+  if (!row.taskNum) {
+    ElMessage.warning('该任务缺少任务号，无法查看详情')
+    return
+  }
+
   taskDetailVisible.value = true
   taskDetailLoading.value = true
   taskDetail.value = undefined

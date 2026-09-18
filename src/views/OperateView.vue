@@ -227,8 +227,8 @@ const loadDeviceInfo = async () => {
       deviceInfo.value = {
         id: status.id ?? 0,
         uavName: status.uavName ?? `无人机 ${deviceId.value}`,
-        deviceId: status.deviceId ?? deviceId.value,
-        isOnline: status.wsConnected,
+        deviceId: status.djiId ?? deviceId.value,
+        isOnline: status.wsConnected ?? false,
         liveState: status.liveState,
         latestStatus: status.latestStatus ?? null,
       }

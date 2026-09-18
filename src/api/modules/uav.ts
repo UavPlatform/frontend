@@ -1,32 +1,12 @@
-import request from '../request'
+import { apiGet } from '../contract'
 import { BizError } from './order'
-import type { LiveState, UavDeviceStatus, UavItem, UavListResult } from '../../types/uav'
-
-/** 后端 UavVo（GET /webUav/getUav 列表项）：不含 wsConnected/onlineStatus/liveState/latestStatus */
-interface BackendUavItem {
-  id: number
-  uavName: string
-  djiId?: string
-  controllerModel?: string
-  isAvailable?: string
-}
-
-/** 后端统一返回体 Result<T>：{ success, code, errorCode, message, data } */
-interface BackendEnvelope<T> {
-  success: boolean
-  code?: number
-  errorCode?: string | null
-  message?: string | null
-  data?: T
-}
-
-const toLiveState = (value?: string | null): LiveState | undefined =>
-  value === 'IDLE' || value === 'STARTING' || value === 'RUNNING' ? value : undefined
+import { toLiveState } from '../../types/uav'
+import type { BackendUavItem, UavDeviceStatus, UavItem, UavListResult } from '../../types/uav'
 
 const mapBackendUav = (item: BackendUavItem, isOnline: boolean): UavItem => {
   return {
-    id: item.id,
-    uavName: item.uavName,
+    id: item.id ?? 0,
+    uavName: item.uavName ?? '',
     deviceId: item.djiId,
     isOnline,
     controllerModel: item.controllerModel,
@@ -35,10 +15,8 @@ const mapBackendUav = (item: BackendUavItem, isOnline: boolean): UavItem => {
 }
 
 const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
-  const response = await request.get<BackendEnvelope<BackendUavItem[]>>('/webUav/getUav', {
-    params: { onlineOnly: onlyOnline },
-  })
-  const body = response.data
+  // 契约：GET /webUav/getUav → Result<List<UavVo>>
+  const body = await apiGet('/webUav/getUav', { params: { onlineOnly: onlyOnline } })
   if (!body.success) {
     throw new BizError(body.errorCode || 'UAV_LIST_FAILED', body.message || '获取无人机列表失败')
   }
@@ -58,10 +36,7 @@ export const listAllUavs = async (): Promise<UavListResult> => fetchUavList(fals
 
 /** 单设备实时状态（GET /webUav/status）：补齐列表 VO 缺失的在线/直播状态 */
 export const getUavStatus = async (deviceId: string): Promise<UavDeviceStatus> => {
-  const response = await request.get<BackendEnvelope<UavDeviceStatus>>('/webUav/status', {
-    params: { deviceId },
-  })
-  const body = response.data
+  const body = await apiGet('/webUav/status', { params: { deviceId } })
   if (!body.success || !body.data) {
     throw new BizError(body.errorCode || 'UAV_STATUS_FAILED', body.message || '获取无人机状态失败')
   }
