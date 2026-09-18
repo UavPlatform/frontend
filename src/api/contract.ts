@@ -1,7 +1,7 @@
 /**
  * OpenAPI 契约的类型门面（前端调用点的唯一契约入口）。
  *
- * 数据流（决策见 docs/adr/0001）：
+ * 数据流：
  *   backend controller 注解
  *     → /v3/api-docs（springdoc 3.1.1）
  *     → backend/spec/openapi/drone-backend.openapi.json（归一化后的结构 SSOT，整文档漂移门禁）

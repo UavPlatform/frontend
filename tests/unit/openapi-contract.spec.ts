@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// 消费侧契约门禁（ADR-0001 T2-R10/R11、ADR-0004 D4/D7）：
+// 消费侧契约门禁：
 //   1) vendor 进来的 OpenAPI 规格必须与 sha256 对账文件一致（防止就地篡改）；
 //   2) 生成物 src/api/generated/openapi.d.ts 必须覆盖调用点用到的全部端点；
 //   3) 前端实际调用的端点必须出现在契约里（调用点与契约不得各说各话）；

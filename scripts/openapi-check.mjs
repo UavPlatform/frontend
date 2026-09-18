@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 校验 vendor 进来的 OpenAPI 契约未被就地篡改（sha256 对账）。
- * 消费侧门禁：契约文件与生成物必须同源同一修订（ADR-0001 T2-R10/R11）。
+ * 消费侧门禁：契约文件与生成物必须同源同一修订。
  */
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'

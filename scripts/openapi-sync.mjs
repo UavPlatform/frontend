@@ -2,7 +2,7 @@
 /**
  * 把后端仓的 OpenAPI 结构契约（SSOT）vendor 到本仓，并记录 sha256 供对账。
  *
- * 依据：docs/adr/0001-后端验证体系技术栈与规格单一事实源.md
+ * 依据：backend/spec/openapi/drone-backend.openapi.json（结构 SSOT）的 vendored 副本
  *   - D1：后端仓 spec/openapi/drone-backend.openapi.json 是唯一结构事实源；
  *   - T2-R10：跨仓不做自动同步，改为「vendor 规格 + sha256 对账」；
  *   - T2-R11：每端固定一种生成器 + 锁版本 + 生成物入库。
