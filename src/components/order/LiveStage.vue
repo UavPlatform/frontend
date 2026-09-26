@@ -11,8 +11,13 @@ import type { LiveCredentials } from '../../types/uav'
  * 开播/停播控件；设备离线或未开播时降级为提示，不会代监管员发起图传。
  */
 const props = defineProps<{
-  /** undefined = 上游仍在解析；null = 解析完成但不可用；对象 = 携带作业设备的任务详情 */
+  /** `/task/detail` 回显（平台直播态展示用）；null = 不可用（无权或未回显） */
   liveDetail?: TaskProgressive | null
+  /**
+   * 作业设备：useOrderDetail 按 任务详情 → 管理端任务 → 订单 三级回退后的契约 deviceId。
+   * undefined = 上游仍在解析；null = 解析完成但该任务无作业设备。
+   */
+  deviceId?: string | null
 }>()
 
 const stage = ref<'resolving' | 'ready' | 'waiting'>('resolving')
@@ -24,19 +29,18 @@ const onPlayerError = (message: string) => {
 }
 
 watch(
-  () => props.liveDetail,
-  async (detail) => {
+  () => props.deviceId,
+  async (deviceId) => {
     credentials.value = null
-    if (detail === undefined) {
+    if (deviceId === undefined) {
       stage.value = 'resolving'
       note.value = ''
       return
     }
 
-    const deviceId = detail?.deviceId
     if (!deviceId) {
       stage.value = 'waiting'
-      note.value = '未获取到该任务的作业设备：管理端暂无任务→设备映射，图传接入待后端提供'
+      note.value = '该任务暂无作业设备（未接单 / 飞手未绑定设备 / 设备离线），暂无可观看图传'
       return
     }
 
@@ -67,7 +71,7 @@ watch(
 
     <div class="live-meta">
       <el-tag size="small" type="info" effect="plain">只读观看 · 无开播控制</el-tag>
-      <el-tag size="small" effect="plain">设备 {{ liveDetail?.deviceId || '—' }}</el-tag>
+      <el-tag size="small" effect="plain">设备 {{ deviceId || '—' }}</el-tag>
       <el-tag size="small" effect="plain">平台直播态 {{ liveDetail?.liveState || '—' }}</el-tag>
     </div>
   </div>

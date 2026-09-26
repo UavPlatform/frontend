@@ -371,6 +371,58 @@ describe('订单详情双模式（TASK-FRONTEND-003）', () => {
     expectNoStartControls(wrapper)
   })
 
+  it('作业设备三级回退：/task/detail 不可用时改用管理端任务的契约 deviceId', async () => {
+    getAdminOrderDetail.mockResolvedValue(activeOrder)
+    getAdminTaskDetail.mockResolvedValue({ ...activeTask, deviceId: 'DJI-7777' })
+    fetchTaskLiveDetail.mockResolvedValue(null)
+
+    const wrapper = await mountView(OrderDetailView, '/orders/ORD-B')
+
+    expect(getPullCredentials).toHaveBeenCalledWith('DJI-7777', '')
+    const text = wrapper.text()
+    expect(text).toContain('DJI-7777')
+    expect(text).not.toContain('该任务暂无作业设备')
+    expectNoStartControls(wrapper)
+  })
+
+  it('作业设备三级回退：任务详情与任务 VO 都没有时取订单的契约 deviceId', async () => {
+    getAdminOrderDetail.mockResolvedValue({ ...activeOrder, deviceId: 'DJI-5555' })
+    getAdminTaskDetail.mockResolvedValue(activeTask)
+    fetchTaskLiveDetail.mockResolvedValue(null)
+
+    const wrapper = await mountView(OrderDetailView, '/orders/ORD-B')
+
+    expect(getPullCredentials).toHaveBeenCalledWith('DJI-5555', '')
+    expect(wrapper.text()).toContain('DJI-5555')
+  })
+
+  it('任务无作业设备时图传区降级为提示，且不发起拉流', async () => {
+    getAdminOrderDetail.mockResolvedValue(activeOrder)
+    getAdminTaskDetail.mockResolvedValue(activeTask)
+    fetchTaskLiveDetail.mockResolvedValue(null)
+
+    const wrapper = await mountView(OrderDetailView, '/orders/ORD-B')
+
+    expect(getPullCredentials).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('该任务暂无作业设备')
+  })
+
+  it('撮合时间线直接回显契约时间字段（paidAt / 双确认）', async () => {
+    getAdminOrderDetail.mockResolvedValue({
+      ...inactiveOrder,
+      paidAt: '2026-09-26 11:00:00',
+      userConfirmedAt: '2026-09-26 12:00:00',
+      riderConfirmedAt: '2026-09-26 12:05:00',
+    })
+
+    const wrapper = await mountView(OrderDetailView, '/orders/ORD-A')
+
+    const text = wrapper.text()
+    expect(text).toContain('2026-09-26 11:00:00') // 支付节点时间来自 order.paidAt
+    expect(text).toContain('2026-09-26 12:05:00') // 双确认节点取两次确认里最晚的一次
+    expect(text).not.toContain('已双确认（确认时间后端未回显）')
+  })
+
   it('全屏 /orders/:orderNum/supervise 渲染 SuperviseView：只读监看 + 信息面板可收起', async () => {
     getAdminOrderDetail.mockResolvedValue(activeOrder)
     getAdminTaskDetail.mockResolvedValue(activeTask)

@@ -16,6 +16,8 @@ const props = defineProps<{
   order: AdminOrderVo
   task?: AdminTaskVo
   liveDetail?: TaskProgressive | null
+  /** 作业设备（useOrderDetail 三级回退后的契约 deviceId）；undefined = 解析中，null = 无作业设备 */
+  deviceId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -33,7 +35,7 @@ const context = computed(() => [
   { label: '任务', value: props.order.taskName || props.task?.taskName || '—' },
   { label: '用户', value: props.order.ownerName || '—' },
   { label: '飞手', value: props.task?.riderName || '—' },
-  { label: '作业无人机', value: props.liveDetail?.deviceId || '—' },
+  { label: '作业无人机', value: props.deviceId || '—' },
   {
     label: '任务状态',
     value: props.task
@@ -65,7 +67,7 @@ const context = computed(() => [
       </div>
 
       <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)]">
-        <LiveStage :live-detail="props.liveDetail" />
+        <LiveStage :live-detail="props.liveDetail" :device-id="props.deviceId" />
 
         <div class="flex flex-col gap-4">
           <section class="panel-card context-panel p-4">

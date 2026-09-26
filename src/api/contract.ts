@@ -143,33 +143,6 @@ export const apiDelete = <P extends PathsWith<'delete'>>(
   options?: CallOptions<P, 'delete'>,
 ): Promise<OkBody<P, 'delete'>> => call<OkBody<P, 'delete'>>('delete', template, options)
 
-/**
- * 待 vendor 同步端点的响应信封（结构与后端 Result<T> 一致）。
- * 契约同步后调用点应改用 `OkBody` 推导并删除此类型。
- */
-export type PendingEnvelope<D> = {
-  success?: boolean
-  data?: D
-  errorCode?: string | null
-  message?: string | null
-}
-
-/**
- * 契约渐进 GET：后端 spec 已提供、本仓 vendor 契约（openapi/）尚未收录的端点专用。
- *
- * 与 `apiGet` 的唯一差别：路径与响应类型由调用点显式给出，不从契约推导——因为该端点
- * 还不在 `src/api/generated/openapi.d.ts` 里，写成字面量路径的 apiGet 调用无法通过类型检查。
- *
- * 迁移要求（TASK-PLATFORM-001 vendor 同步后必须完成）：
- *   1. `pnpm api` 重新 vendor + 生成；
- *   2. 调用点改回字面量路径的 apiGet 调用，并在 tests/unit/openapi-contract.spec.ts 登记 CALLED_OPERATIONS；
- *   3. 把该端点从同文件的 PENDING_OPERATIONS 移除（同步后其「尚未 vendor」断言会失败，强制本迁移）。
- */
-export const apiGetPending = async <D = unknown, B = PendingEnvelope<D>>(
-  template: string,
-  options?: { path?: Record<string, string | number>; params?: Record<string, unknown> },
-): Promise<B> => call<B>('get', template, options)
-
 /** 取信封 data：success=false 或 data 为空即抛 BizError（与旧 unwrap 语义一致） */
 export const expectData = <E extends EnvelopeLike>(
   envelope: E,

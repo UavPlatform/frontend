@@ -43,25 +43,13 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['post', '/live/get'],
   ['post', '/live/close'],
   ['get', '/task/detail'],
-  ['get', '/tasks/{taskNum}/attachments'],
-]
-
-/**
- * 后端 spec 已提供、本仓 vendor 契约（openapi/）尚未收录的端点：经 `apiGetPending` 调用。
- * 目前分两处：撮合侧数据在 src/api/modules/order-supervision.ts，
- * 主体查询（/admin/users、/admin/pilots，TASK-FRONTEND-004）在 src/api/modules/admin-query.ts。
- * TASK-PLATFORM-001 vendor 同步后必须迁入 CALLED_OPERATIONS（下方「尚未 vendor」断言会失败强制迁移）。
- */
-const PENDING_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> = [
   ['get', '/task/{taskNum}/applications'],
+  ['get', '/tasks/{taskNum}/attachments'],
   ['get', '/admin/users'],
   ['get', '/admin/users/{userId}'],
   ['get', '/admin/pilots'],
   ['get', '/admin/pilots/{userId}'],
 ]
-
-/** apiGetPending('/x', …) 调用点（与 PENDING_OPERATIONS 双向一致） */
-const PENDING_CALL_RE = /\bapiGetPending\s*(?:<[^>]*>)?\(\s*'([^']+)'/g
 
 /** 门面自身与其运行时底座：这两个文件允许出现路径字面量与 axios 实例调用 */
 const FACADE_FILES = new Set(['api/contract.ts', 'api/request.ts'])
@@ -146,34 +134,6 @@ describe('OpenAPI 契约（消费侧门禁）', () => {
     const stale = [...registered].filter((item) => !called.has(item)).sort()
 
     expect({ unregistered, stale }).toEqual({ unregistered: [], stale: [] })
-  })
-
-  it('pending 端点确实尚未 vendor（同步后本断言失败，强制迁入登记表）', () => {
-    const alreadyVendored = PENDING_OPERATIONS.filter(([method, path]) => {
-      const item = spec.paths[path]
-      return item && method in item
-    })
-    expect(alreadyVendored).toEqual([])
-  })
-
-  it('pending 端点必须经 apiGetPending 调用，且不得混入登记表', () => {
-    const pendingCalled = new Set<string>()
-    const registered = new Set(CALLED_OPERATIONS.map(([, path]) => path))
-    const violations: string[] = []
-
-    for (const rel of sourceFiles) {
-      const text = readSource(rel)
-      for (const match of text.matchAll(PENDING_CALL_RE)) {
-        pendingCalled.add(match[1])
-        if (registered.has(match[1])) {
-          violations.push(`${rel}: ${match[1]} 已进登记表，应改用 apiGet 字面量调用`)
-        }
-      }
-    }
-
-    const expected = PENDING_OPERATIONS.map(([, path]) => path).sort()
-    expect([...pendingCalled].sort()).toEqual(expected)
-    expect(violations).toEqual([])
   })
 
   it('除门面外没有任何直连 HTTP 或未登记的契约路径字面量', () => {

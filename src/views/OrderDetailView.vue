@@ -17,7 +17,7 @@ const route = useRoute()
 const router = useRouter()
 
 const orderNum = computed(() => String(route.params.orderNum ?? ''))
-const { order, task, liveDetail, match, loading, reload } = useOrderDetail(orderNum)
+const { order, task, liveDetail, deviceId, match, loading, reload } = useOrderDetail(orderNum)
 
 type DetailTab = 'manage' | 'supervise'
 
@@ -143,6 +143,7 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
               :order="order"
               :task="task"
               :live-detail="liveDetail"
+              :device-id="deviceId"
               @back-to-manage="activeTab = 'manage'"
             />
           </el-tab-pane>

@@ -16,7 +16,7 @@ const route = useRoute()
 const router = useRouter()
 
 const orderNum = computed(() => String(route.params.orderNum ?? ''))
-const { order, task, liveDetail, match, loading } = useOrderDetail(orderNum)
+const { order, task, liveDetail, deviceId, match, loading } = useOrderDetail(orderNum)
 
 const panelCollapsed = ref(false)
 
@@ -42,7 +42,7 @@ const context = computed(() => {
     { label: '用户', value: currentOrder.ownerName || '—' },
     { label: '飞手', value: currentTask?.riderName || '—' },
     { label: '任务', value: currentOrder.taskName || currentTask?.taskName || '—' },
-    { label: '作业无人机', value: liveDetail.value?.deviceId || '—' },
+    { label: '作业无人机', value: deviceId.value || '—' },
     { label: '平台直播态', value: liveDetail.value?.liveState || '—' },
     { label: '撮合状态', value: match.value.matchStatus || '—' },
     {
@@ -93,7 +93,7 @@ const openManage = () => {
         </div>
 
         <div class="mt-4 grid gap-4" :class="panelCollapsed ? '' : 'xl:grid-cols-[minmax(0,68fr)_minmax(0,32fr)]'">
-          <LiveStage :live-detail="liveDetail" />
+          <LiveStage :live-detail="liveDetail" :device-id="deviceId" />
 
           <aside v-if="!panelCollapsed" class="flex flex-col gap-4">
             <section class="panel-card context-panel p-4">

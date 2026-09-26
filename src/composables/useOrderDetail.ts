@@ -14,7 +14,13 @@ export interface OrderDetailState {
   task: Ref<AdminTaskVo | undefined>
   /** `/task/detail`（含 deviceId / liveState / 撮合字段）；null = 不可用（无权或未回显） */
   liveDetail: Ref<TaskProgressive | null | undefined>
-  /** 撮合渐进字段（liveDetail 优先，退回管理端任务 VO）——唯一读取点在 order-supervision */
+  /**
+   * 作业设备（契约 deviceId 字段，后端解析链 task → task_assignment → rider_uav → 在线设备）：
+   * 任务详情 → 管理端任务 → 订单 三级回退。
+   * undefined = 上游仍在解析；null = 解析完成但该任务无作业设备（未接单 / 未绑定设备 / 设备离线）。
+   */
+  deviceId: Ref<string | null | undefined>
+  /** 撮合字段（liveDetail 优先，退回管理端任务 VO）——唯一读取点在 order-supervision */
   match: Ref<MatchProgressFields>
   loading: Ref<boolean>
   reload: () => Promise<void>
@@ -68,10 +74,26 @@ export const useOrderDetail = (orderNum: Ref<string>): OrderDetailState => {
 
   watch(orderNum, reload, { immediate: true })
 
+  const deviceId = computed<string | null | undefined>(() => {
+    // 任务详情是图传上下文的第一来源；未回显时退回管理端任务与订单的契约 deviceId
+    if (liveDetail.value) {
+      return liveDetail.value.deviceId ?? task.value?.deviceId ?? order.value?.deviceId ?? null
+    }
+    if (liveDetail.value === null) {
+      return task.value?.deviceId ?? order.value?.deviceId ?? null
+    }
+    // 详情仍未回显：订单没有关联任务时不会发起详情查询，直接取订单上的作业设备
+    if (order.value && !order.value.taskNum) {
+      return order.value.deviceId ?? null
+    }
+    return undefined
+  })
+
   return {
     order,
     task,
     liveDetail,
+    deviceId,
     match: computed(() => readMatchFields(liveDetail.value ?? task.value)),
     loading,
     reload,

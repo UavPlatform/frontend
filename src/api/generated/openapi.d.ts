@@ -201,6 +201,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/pilots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 注册飞手分页列表
+         * @description 注册飞手（role=1）；含绑定无人机数、在线无人机数与累计完成单；page 从 0 起
+         */
+        get: operations["listPilots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/pilots/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 飞手详情
+         * @description 基本信息 + 绑定无人机表（djiId、机型名、在线、可用）+ 关联订单；无人机启用/禁用复用 POST /admin/uav/available（按 deviceId=djiId 启停）
+         */
+        get: operations["pilotDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tasks": {
         parameters: {
             query?: never;
@@ -333,6 +373,66 @@ export interface paths {
          * @description 获取系统的统计信息，包括无人机总数、在线数、直播数等
          */
         get: operations["getStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 注册用户分页列表
+         * @description 注册普通用户（role=0，飞手见 /admin/pilots）；含名下订单数；page 从 0 起
+         */
+        get: operations["listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 用户详情
+         * @description 基本信息 + 关联订单摘要（orderNum、任务、状态、金额）；飞手请用 /admin/pilots/{userId}
+         */
+        get: operations["userDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aircraft-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 机型目录
+         * @description 平台机型目录（仅启用机型）：型号、显示名、最大载重、机型系数、是否可吊运
+         */
+        get: operations["listAircraftModels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -952,7 +1052,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rider/accept": {
+    "/rider/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -962,10 +1062,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 接受任务
-         * @description 骑手接受指定任务
+         * 飞手应征任务
+         * @description 提交 taskNum + aircraftModelId，服务端按 ADR-0003 平台计价公式（航点距离 + 货物重量/类别 + 机型系数）计算并持久化系统报价 quotedAmount；不接受客户端金额字段——请求携带 price 等字段一律忽略（不允许改价）。设备/机型门禁：UAV_NOT_FOUND / AIRCRAFT_MODEL_REQUIRED / AIRCRAFT_MODEL_NOT_FOUND / AIRCRAFT_MODEL_NOT_TRANSPORTABLE / AIRCRAFT_MODEL_MISMATCH；超重拒绝：EXCEEDS_PAYLOAD；撮合状态门禁：任务进入选定/支付/确认/验收阶段后拒绝新应征（MATCH_STATUS_INVALID）
          */
-        post: operations["acceptTask"];
+        post: operations["apply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -983,7 +1083,7 @@ export interface paths {
         put?: never;
         /**
          * 取消接单
-         * @description 骑手取消已接受的任务，任务回到空闲状态
+         * @description 骑手取消执行中的任务，任务回到待撮合（重新开放撮合）
          */
         post: operations["cancelTask"];
         delete?: never;
@@ -1003,9 +1103,29 @@ export interface paths {
         put?: never;
         /**
          * 完成任务
-         * @description 骑手完成已接受的任务；note 为可选完成说明（≤500 字）
+         * @description 骑手交付任务；必须先上传履约证据（attachment），否则 DELIVERY_EVIDENCE_REQUIRED；交付后进入待验收（PENDING_ACCEPTANCE / 订单 WAITING_CONFIRM）。note 为可选完成说明（≤500 字）
          */
         post: operations["completeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rider/confirm-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 飞手确认订单
+         * @description ADR-0003 决定 4：被选定的飞手确认接单与约定作业时间（记 riderConfirmedAt），撮合状态 → CONFIRMED；双确认齐备后任务经门禁推进 IN_PROGRESS（可执飞）。未到待确认阶段返回 MATCH_STATUS_INVALID/ORDER_STATUS_INVALID；非选定飞手返回 NO_PERMISSION；门禁不满足返回 DOUBLE_CONFIRM_REQUIRED
+         */
+        post: operations["confirmOrder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1023,7 +1143,7 @@ export interface paths {
         put?: never;
         /**
          * 绑定无人机
-         * @description 飞手绑定新的无人机
+         * @description 飞手绑定新的无人机并映射机型（机型取自 /api/aircraft-models）
          */
         post: operations["bindDrone"];
         delete?: never;
@@ -1064,7 +1184,7 @@ export interface paths {
         post?: never;
         /**
          * 解绑无人机
-         * @description 飞手解绑已绑定的无人机
+         * @description 飞手解绑已绑定的无人机；提交的机型须与绑定记录一致（未映射的存量绑定可不传机型）
          */
         delete: operations["unbindDrone"];
         options?: never;
@@ -1161,7 +1281,7 @@ export interface paths {
         };
         /**
          * 任务广场
-         * @description 骑手查看所有可接的任务
+         * @description 骑手浏览待撮合的吊运任务（招募中/洽谈中，含货物重量/类别等 cargo 字段），不要求订单已支付——支付发生在用户选定应征之后（ADR-0003）
          */
         get: operations["listAvailableTasks"];
         put?: never;
@@ -1201,7 +1321,7 @@ export interface paths {
         };
         /**
          * 任务详情
-         * @description 飞手查看任意任务的详细信息（无需任务归属）
+         * @description 飞手查看任意任务的详细信息（无需任务归属），含撮合状态、货物字段与订单/报价回显
          */
         get: operations["getTaskDetail_1"];
         put?: never;
@@ -1223,7 +1343,7 @@ export interface paths {
         put?: never;
         /**
          * 确认收货
-         * @description 骑手完成任务后用户确认收货，订单完结
+         * @description 飞手上传履约证据并交付后用户确认收货：须已存在 attachment 证据（否则 DELIVERY_EVIDENCE_REQUIRED），确认后订单 COMPLETED、撮合状态 CLOSED
          */
         post: operations["confirmTask"];
         delete?: never;
@@ -1243,7 +1363,7 @@ export interface paths {
         put?: never;
         /**
          * 创建任务
-         * @description 创建新任务，包含任务类型、航点信息等
+         * @description 创建新任务（含任务类型、航点、货物字段），同时生成待撮合草稿订单（MATCHING），不强制立即支付（ADR-0003 决定 3）；金额在选定应征时锁定
          */
         post: operations["createTask"];
         delete?: never;
@@ -1264,7 +1384,7 @@ export interface paths {
         post?: never;
         /**
          * 删除任务
-         * @description 删除指定ID的任务，只能删除自己创建的任务
+         * @description 删除指定ID的任务，只能删除自己创建的任务；已支付/已完成订单的任务禁止删除
          */
         delete: operations["deleteTask"];
         options?: never;
@@ -1281,7 +1401,7 @@ export interface paths {
         };
         /**
          * 获取任务详情
-         * @description 根据任务编号获取详细信息，包含航点列表
+         * @description 根据任务编号获取详细信息，含航点、货物字段、撮合状态 matchStatus、约定时间/双方确认时间与选定应征报价（quotedAmount）/机型
          */
         get: operations["getTaskDetail"];
         put?: never;
@@ -1329,6 +1449,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/task/{taskNum}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 应征列表
+         * @description 任务属主、应征飞手与管理员（role=2，监管端只读）按任务编号查询飞手应征列表：飞手、机型、载重、系统报价 quotedAmount、应征时间、状态（非属主非应征的普通用户 403）
+         */
+        get: operations["listApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task/{taskNum}/chat-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按任务编号查询任务会话
+         * @description 任务属主按 taskNum 聚合与各意向飞手的一对一会话（含对方飞手、applicationId、最后一条消息与未读数）；应征/选定飞手仅返回自己参与的会话；非属主非应征飞手 → 403
+         */
+        get: operations["listTaskChatSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/task/{taskNum}/select-rider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 用户选定应征并下单
+         * @description ADR-0003 决定 3：选定一条应征（其余自动 CLOSED）+ 提交约定作业时间 scheduledTime，服务端锁定订单 totalAmount = 该应征 quotedAmount（严格相等，不允许改价）并转待支付（PENDING）；随后走既有 POST /pay/{orderNum} 支付。撮合状态 → AWAITING_PAYMENT，非法迁移返回 MATCH_STATUS_INVALID；已有待支付订单返回 ORDER_ALREADY_EXISTS
+         */
+        post: operations["selectRider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks/{taskNum}/attachments": {
         parameters: {
             query?: never;
@@ -1338,7 +1518,7 @@ export interface paths {
         };
         /**
          * 附件列表
-         * @description 任务所有者与接单飞手可看；逐条附 presigned 下载 URL（15 分钟有效）
+         * @description 任务所有者、接单飞手与管理员（role=2，监管端只读）可看；逐条附 presigned 下载 URL（15 分钟有效）
          */
         get: operations["list"];
         put?: never;
@@ -1358,7 +1538,7 @@ export interface paths {
         };
         /**
          * 获取交付物下载凭证
-         * @description 任务所有者或接单飞手可看
+         * @description 任务所有者、接单飞手与管理员（role=2，监管端只读）可看
          */
         get: operations["downloadUrl"];
         put?: never;
@@ -1748,6 +1928,8 @@ export interface components {
              * @description 创建时间，格式 yyyy-MM-dd HH:mm:ss
              */
             createTime?: string;
+            /** @description 作业设备DJI ID（解析链 task → task_assignment → rider_uav → 在线设备；任务未接单/飞手未绑定设备/设备离线时为 null，前端按“无作业设备”占位） */
+            deviceId?: string;
             /** @description 订单号 */
             orderNum?: string;
             /** @description 订单状态枚举名（PENDING/PAID/CANCELLED/REFUNDED/COMPLETED/WAITING_CONFIRM/DISPUTED） */
@@ -1761,6 +1943,16 @@ export interface components {
             orderStatusDesc?: string;
             /** @description 下单用户名称 */
             ownerName?: string;
+            /**
+             * Format: date-time
+             * @description 支付完成时间：优先取 PayRecord.payTime（支付成功回调时刻）；无支付流水但订单已支付/已结案时回退订单 updateTime（状态迁移时刻）；未支付或待撮合时为 null，格式 yyyy-MM-dd HH:mm:ss
+             */
+            paidAt?: string;
+            /**
+             * Format: date-time
+             * @description 飞手确认接单时间（ADR-0003 决定 4；飞手未确认时为 null），格式 yyyy-MM-dd HH:mm:ss
+             */
+            riderConfirmedAt?: string;
             /** @description 关联任务名称 */
             taskName?: string;
             /** @description 关联任务编号 */
@@ -1775,6 +1967,11 @@ export interface components {
              */
             updateTime?: string;
             /**
+             * Format: date-time
+             * @description 用户下单确认时间（选定应征 + 约定作业时间，ADR-0003 决定 4；无订单或未下单时为 null），格式 yyyy-MM-dd HH:mm:ss
+             */
+            userConfirmedAt?: string;
+            /**
              * Format: int64
              * @description 下单用户ID
              */
@@ -1784,6 +1981,31 @@ export interface components {
         AdminPageVoAdminOrderVo: {
             /** @description 当前页数据列表 */
             content?: components["schemas"]["AdminOrderVo"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminPilotVo: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminPilotVo"][];
             /**
              * Format: int32
              * @description 当前页码（从 0 开始）
@@ -1830,6 +2052,106 @@ export interface components {
              */
             totalPages?: number;
         };
+        /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminUserVo: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminUserVo"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端飞手详情（含绑定无人机与关联订单） */
+        AdminPilotDetailVo: {
+            /**
+             * Format: int64
+             * @description 累计完成单数（接单记录 complete_time 非空）
+             */
+            completedCount?: number;
+            /** @description 绑定无人机表（无绑定为空数组） */
+            drones?: components["schemas"]["AdminPilotDroneVo"][];
+            /** @description 关联订单（按创建时间倒序，无订单为空数组） */
+            orders?: components["schemas"]["AdminOrderVo"][];
+            /**
+             * Format: int32
+             * @description 角色（恒为 1 飞手）
+             */
+            role?: number;
+            /**
+             * Format: int32
+             * @description 账号状态（1 正常 / 0 停用）
+             */
+            status?: number;
+            /**
+             * Format: int64
+             * @description 飞手ID（user.id）
+             */
+            userId?: number;
+            /** @description 用户名（昵称） */
+            userName?: string;
+        };
+        /** @description 飞手绑定无人机（djiId + 机型 + 在线 + 可用） */
+        AdminPilotDroneVo: {
+            /**
+             * Format: int64
+             * @description 机型ID（未映射时为 null）
+             */
+            aircraftModelId?: number;
+            /** @description 是否可用/启用（设备档案 is_available=1；设备未注册时为 null，不可启停） */
+            available?: boolean;
+            /** @description DJI 设备ID */
+            djiId?: string;
+            /** @description 机型显示名（未映射时为 null） */
+            modelName?: string;
+            /** @description 是否在线（设备档案 online_status=1；无设备档案为 false） */
+            online?: boolean;
+        };
+        /** @description 管理端注册飞手（role=1） */
+        AdminPilotVo: {
+            /**
+             * Format: int64
+             * @description 累计完成单数（接单记录 complete_time 非空）
+             */
+            completedCount?: number;
+            /**
+             * Format: int32
+             * @description 在线无人机数（online_status=1 的绑定设备）
+             */
+            onlineUavCount?: number;
+            /**
+             * Format: int32
+             * @description 账号状态（1 正常 / 0 停用）
+             */
+            status?: number;
+            /**
+             * Format: int32
+             * @description 绑定无人机数（rider_uav 记录数）
+             */
+            uavCount?: number;
+            /**
+             * Format: int64
+             * @description 飞手ID（user.id）
+             */
+            userId?: number;
+            /** @description 用户名（昵称） */
+            userName?: string;
+        };
         AdminStatisticsVO: {
             /** Format: int32 */
             availableUavs?: number;
@@ -1859,6 +2181,8 @@ export interface components {
             createTime?: string;
             /** @description 任务描述 */
             description?: string;
+            /** @description 作业设备DJI ID（解析链 task → task_assignment → rider_uav → 在线设备；任务未接单/飞手未绑定设备/设备离线时为 null，前端按“无作业设备”占位） */
+            deviceId?: string;
             /**
              * Format: int64
              * @description 任务ID
@@ -1878,10 +2202,20 @@ export interface components {
             /** @description 发布用户名称 */
             ownerName?: string;
             /**
+             * Format: date-time
+             * @description 支付完成时间：优先取 PayRecord.payTime（支付成功回调时刻）；无支付流水但订单已支付/已结案时回退订单 updateTime（状态迁移时刻）；未支付或待撮合时为 null，格式 yyyy-MM-dd HH:mm:ss
+             */
+            paidAt?: string;
+            /**
              * Format: double
              * @description 任务奖励金额，单位：元（服务端按航点距离计价，客户端传入的 reward 仅作参考）
              */
             reward?: number;
+            /**
+             * Format: date-time
+             * @description 飞手确认接单时间（ADR-0003 决定 4；飞手未确认时为 null），格式 yyyy-MM-dd HH:mm:ss
+             */
+            riderConfirmedAt?: string;
             /** @description 接单飞手名称（未接单时为 null） */
             riderName?: string;
             /** @description 任务名称 */
@@ -1907,10 +2241,75 @@ export interface components {
              */
             updateTime?: string;
             /**
+             * Format: date-time
+             * @description 用户下单确认时间（选定应征 + 约定作业时间，ADR-0003 决定 4；无订单或未下单时为 null），格式 yyyy-MM-dd HH:mm:ss
+             */
+            userConfirmedAt?: string;
+            /**
              * Format: int64
              * @description 发布用户ID
              */
             userId?: number;
+        };
+        /** @description 管理端用户详情（含关联订单摘要） */
+        AdminUserDetailVo: {
+            /** @description 关联订单（按创建时间倒序，无订单为空数组） */
+            orders?: components["schemas"]["AdminOrderVo"][];
+            /**
+             * Format: int32
+             * @description 角色（0 普通用户 / 2 管理员；飞手不走本详情）
+             */
+            role?: number;
+            /**
+             * Format: int32
+             * @description 账号状态（1 正常 / 0 停用）
+             */
+            status?: number;
+            /**
+             * Format: int64
+             * @description 用户ID
+             */
+            userId?: number;
+            /** @description 用户名（昵称） */
+            userName?: string;
+        };
+        /** @description 管理端注册用户（role=0） */
+        AdminUserVo: {
+            /**
+             * Format: int64
+             * @description 名下订单总数
+             */
+            orderCount?: number;
+            /**
+             * Format: int32
+             * @description 账号状态（1 正常 / 0 停用）
+             */
+            status?: number;
+            /**
+             * Format: int64
+             * @description 用户ID
+             */
+            userId?: number;
+            /** @description 用户名（昵称） */
+            userName?: string;
+        };
+        /** @description 平台机型目录项 */
+        AircraftModelVO: {
+            /** @description 机型系数：ADR-0003 报价公式乘子 */
+            coefficient?: number;
+            /** @description 显示名（如 DJI FlyCart 30） */
+            displayName?: string;
+            /**
+             * Format: int64
+             * @description 机型ID：绑机与吊运应征提交的 aircraftModelId
+             */
+            id?: number;
+            /** @description 最大载重（kg） */
+            maxPayloadKg?: number;
+            /** @description 型号编码（如 FC30、M350RTK） */
+            modelCode?: string;
+            /** @description 是否可承接吊运 */
+            transportEnabled?: boolean;
         };
         AmapConfigVO: {
             key?: string;
@@ -2145,6 +2544,22 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminPilotVo: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminPilotVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultAdminPageVoAdminTaskVo: {
             /**
              * Format: int32
@@ -2153,6 +2568,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminPageVoAdminTaskVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminUserVo: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminUserVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPilotDetailVo: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPilotDetailVo"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -2185,6 +2632,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminTaskVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminUserDetailVo: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminUserDetailVo"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -2233,6 +2696,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["GpsPointVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultListAircraftModelVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AircraftModelVO"][];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -2331,6 +2810,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["RiderUav"][];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultListTaskApplicationVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["TaskApplicationVO"][];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultListTaskChatSessionVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["TaskChatSessionVO"][];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -2615,6 +3126,22 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultTaskApplicationVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["TaskApplicationVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultTaskPageVO: {
             /**
              * Format: int32
@@ -2799,9 +3326,19 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
+        RiderApplyDto: {
+            /** Format: int64 */
+            aircraftModelId?: number;
+            taskNum?: string;
+        };
         RiderInfoDto: unknown;
         /** @description 飞手注册参数 */
         RiderRegisterDto: {
+            /**
+             * Format: int64
+             * @description 机型ID（/api/aircraft-models 返回）：提供 djiId 时可同时映射机型；不传则绑定为未映射设备，吊运应征将被 AIRCRAFT_MODEL_REQUIRED 拒绝
+             */
+            aircraftModelId?: number;
             /** @description 无人机DJI ID */
             djiId?: string;
             /** @description 密码 */
@@ -2821,6 +3358,8 @@ export interface components {
             totalEarnings?: number;
         };
         RiderUav: {
+            /** Format: int64 */
+            aircraftModelId?: number;
             /** Format: date-time */
             createTime?: string;
             djiId?: string;
@@ -2829,15 +3368,33 @@ export interface components {
             /** Format: int64 */
             userId?: number;
         };
+        /** @description 用户选定应征并下单（金额由服务端锁定为系统报价，不接受客户端金额字段） */
+        SelectRiderDto: {
+            /**
+             * Format: int64
+             * @description 用户选定的应征记录 ID
+             */
+            applicationId: number;
+            /**
+             * Format: date-time
+             * @description 约定作业时间（yyyy-MM-dd HH:mm:ss），下单即视为用户确认该时间
+             */
+            scheduledTime: string;
+        };
         SessionDTO: {
+            /** Format: int64 */
+            applicationId?: number;
             avatar?: string;
             description?: string;
             name: string;
+            taskNum?: string;
             /** Format: int32 */
             type: number;
             userIds: number[];
         };
         SessionVO: {
+            /** Format: int64 */
+            applicationId?: number;
             avatar?: string;
             /** Format: int64 */
             createTime?: number;
@@ -2851,6 +3408,7 @@ export interface components {
             otherUserName?: string;
             /** Format: int64 */
             ownerId?: number;
+            taskNum?: string;
             /** Format: int32 */
             type?: number;
             /** Format: int32 */
@@ -2862,7 +3420,80 @@ export interface components {
             /** Format: int32 */
             rating?: number;
         };
+        /** @description 飞手应征记录（含平台系统报价） */
+        TaskApplicationVO: {
+            /**
+             * Format: int64
+             * @description 应征使用的机型 ID
+             */
+            aircraftModelId?: number;
+            /** @description 机型显示名（如 DJI FlyCart 30） */
+            aircraftModelName?: string;
+            /**
+             * Format: int64
+             * @description 应征记录 ID
+             */
+            applicationId?: number;
+            /**
+             * Format: date-time
+             * @description 应征时间（首次应征时间）
+             */
+            appliedAt?: string;
+            /**
+             * @description 任务撮合子状态（SEEKING_RIDER/NEGOTIATING/AWAITING_PAYMENT/AWAITING_RIDER_CONFIRM/CONFIRMED/PENDING_ACCEPTANCE/CLOSED），供端上判断当前阶段
+             * @enum {string}
+             */
+            matchStatus?: "AWAITING_PAYMENT" | "AWAITING_RIDER_CONFIRM" | "CLOSED" | "CONFIRMED" | "NEGOTIATING" | "PENDING_ACCEPTANCE" | "SEEKING_RIDER";
+            /** @description 机型最大载重（kg） */
+            maxPayloadKg?: number;
+            /** @description 机型型号编码（如 FC30、M350RTK） */
+            modelCode?: string;
+            /** @description 平台系统报价（元）：成交价必须严格等于该值，不允许改价 */
+            quotedAmount?: number;
+            /**
+             * Format: int64
+             * @description 应征飞手用户 ID
+             */
+            riderId?: number;
+            /** @description 应征飞手用户名 */
+            riderName?: string;
+            /**
+             * @description 应征状态（ACTIVE=应征中；SELECTED/CLOSED 为用户选定阶段语义）
+             * @enum {string}
+             */
+            status?: "ACTIVE" | "CLOSED" | "SELECTED";
+            /** @description 任务编号 */
+            taskNum?: string;
+        };
+        TaskChatSessionVO: {
+            /** Format: int64 */
+            applicationId?: number;
+            /** Format: int64 */
+            createTime?: number;
+            lastMessage?: string;
+            /** Format: int64 */
+            lastMessageTime?: number;
+            name?: string;
+            /** Format: int64 */
+            otherUserId?: number;
+            otherUserName?: string;
+            /** Format: int64 */
+            ownerId?: number;
+            /** Format: int64 */
+            riderId?: number;
+            riderName?: string;
+            /** Format: int64 */
+            sessionId?: number;
+            taskNum?: string;
+            /** Format: int32 */
+            type?: number;
+            /** Format: int32 */
+            unreadCount?: number;
+        };
         TaskDto: {
+            /** @enum {string} */
+            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "EQUIPMENT";
+            cargoWeightKg?: number;
             description?: string;
             /** Format: double */
             reward?: number;
@@ -2886,6 +3517,12 @@ export interface components {
             /** Format: date-time */
             acceptTime?: string;
             actionHint?: string;
+            /** Format: int64 */
+            aircraftModelId?: number;
+            aircraftModelName?: string;
+            /** @enum {string} */
+            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "EQUIPMENT";
+            cargoWeightKg?: number;
             completeNote?: string;
             /** Format: date-time */
             createTime?: string;
@@ -2894,11 +3531,19 @@ export interface components {
             /** Format: int64 */
             id?: number;
             liveState?: string;
+            /** @enum {string} */
+            matchStatus?: "AWAITING_PAYMENT" | "AWAITING_RIDER_CONFIRM" | "CLOSED" | "CONFIRMED" | "NEGOTIATING" | "PENDING_ACCEPTANCE" | "SEEKING_RIDER";
+            modelCode?: string;
             orderNum?: string;
             orderStatus?: string;
+            quotedAmount?: number;
+            /** Format: date-time */
+            riderConfirmedAt?: string;
             /** Format: int64 */
             riderId?: number;
             riderName?: string;
+            /** Format: date-time */
+            scheduledTime?: string;
             taskName?: string;
             taskNum?: string;
             /** @enum {string} */
@@ -2911,6 +3556,8 @@ export interface components {
             totalDistance?: number;
             /** Format: date-time */
             updateTime?: string;
+            /** Format: date-time */
+            userConfirmedAt?: string;
             /** Format: int64 */
             userId?: number;
             waypoints?: components["schemas"]["WaypointVo"][];
@@ -3384,6 +4031,56 @@ export interface operations {
             };
         };
     };
+    listPilots: {
+        parameters: {
+            query?: {
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 用户名关键字（模糊匹配，忽略大小写） */
+                keyword?: string;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminPilotVo"];
+                };
+            };
+        };
+    };
+    pilotDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 飞手ID */
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPilotDetailVo"];
+                };
+            };
+        };
+    };
     listTasks_1: {
         parameters: {
             query?: {
@@ -3555,6 +4252,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultAdminStatisticsVO"];
+                };
+            };
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 用户名关键字（模糊匹配，忽略大小写） */
+                keyword?: string;
+                /** @description 账号状态筛选（1 正常 / 0 停用） */
+                status?: number;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminUserVo"];
+                };
+            };
+        };
+    };
+    userDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 用户ID */
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminUserDetailVo"];
+                };
+            };
+        };
+    };
+    listAircraftModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListAircraftModelVO"];
                 };
             };
         };
@@ -4389,17 +5158,23 @@ export interface operations {
             };
         };
     };
-    acceptTask: {
+    apply: {
         parameters: {
             query: {
                 /** @description 任务编号 */
                 taskNum: string;
+                /** @description 本次应征使用的机型 ID */
+                aircraftModelId: string;
             };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiderApplyDto"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -4407,7 +5182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResultVoid"];
+                    "application/json": components["schemas"]["ResultTaskApplicationVO"];
                 };
             };
         };
@@ -4460,9 +5235,33 @@ export interface operations {
             };
         };
     };
+    confirmOrder: {
+        parameters: {
+            query: {
+                /** @description 任务编号 */
+                taskNum: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultTaskVo"];
+                };
+            };
+        };
+    };
     bindDrone: {
         parameters: {
             query: {
+                aircraftModelId: number;
                 djiId: string;
             };
             header?: never;
@@ -4505,6 +5304,7 @@ export interface operations {
     unbindDrone: {
         parameters: {
             query: {
+                aircraftModelId?: number;
                 djiId: string;
             };
             header?: never;
@@ -4803,6 +5603,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultTaskPageVO"];
+                };
+            };
+        };
+    };
+    listApplications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 任务编号 */
+                taskNum: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListTaskApplicationVO"];
+                };
+            };
+        };
+    };
+    listTaskChatSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 任务编号 */
+                taskNum: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListTaskChatSessionVO"];
+                };
+            };
+        };
+    };
+    selectRider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 任务编号 */
+                taskNum: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectRiderDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultTaskVo"];
                 };
             };
         };
