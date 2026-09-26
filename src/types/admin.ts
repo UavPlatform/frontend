@@ -27,3 +27,15 @@ export type AdminTaskVo = Schemas['AdminTaskVo']
 export type AdminPageVo<T> = Omit<Schemas['AdminPageVoAdminOrderVo'], 'content'> & {
   content: T[]
 }
+
+/** 契约 OrderComplaint：GET /admin/complaint/list 列表项 */
+export type AdminComplaint = Schemas['OrderComplaint']
+
+/** 契约 ComplaintListVO：GET /admin/complaint/list 的 data */
+export type AdminComplaintList = Schemas['ComplaintListVO']
+
+/** 契约 GpsPointVO：GET /webUav/trajectory 的点位（遥测摘要数据源） */
+export type OrderGpsPoint = Schemas['GpsPointVO']
+
+/** 契约 RiderStatsVO：GET /rider/recommended 列表项（首页在册飞手数） */
+export type RiderStats = Schemas['RiderStatsVO']

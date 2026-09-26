@@ -18,6 +18,20 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    // 订单详情（TASK-FRONTEND-003 会在其上分「管理 / 监管」双 Tab；本任务先保证跳转目标存在）
+    path: '/orders/:orderNum',
+    name: 'order-detail',
+    component: () => import('../views/OrderDetailView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    // 任务监管全屏（ADR-0004）：视图由 TASK-FRONTEND-003 承接，当前先落到订单详情
+    path: '/orders/:orderNum/supervise',
+    name: 'order-supervise',
+    redirect: (to) => ({ name: 'order-detail', params: { orderNum: String(to.params.orderNum) } }),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/users',
     name: 'users',
     component: () => import('../views/UsersView.vue'),

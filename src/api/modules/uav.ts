@@ -2,6 +2,7 @@ import { apiGet } from '../contract'
 import { BizError } from './order'
 import { toLiveState } from '../../types/uav'
 import type { BackendUavItem, UavDeviceStatus, UavItem, UavListResult } from '../../types/uav'
+import type { OrderGpsPoint } from '../../types/admin'
 
 const mapBackendUav = (item: BackendUavItem, isOnline: boolean): UavItem => {
   return {
@@ -45,4 +46,16 @@ export const getUavStatus = async (deviceId: string): Promise<UavDeviceStatus> =
     ...body.data,
     liveState: toLiveState(body.data.liveState),
   }
+}
+
+/**
+ * 订单飞行轨迹（GET /webUav/trajectory）：按订单号升序返回 GPS 点位。
+ * 首页飞行卡的遥测摘要（高度/速度/电量/最后上报）即取自首尾点位。
+ */
+export const getOrderTrajectory = async (orderNum: string): Promise<OrderGpsPoint[]> => {
+  const body = await apiGet('/webUav/trajectory', { params: { orderNum } })
+  if (!body.success) {
+    throw new BizError(body.errorCode || 'TRAJECTORY_FAILED', body.message || '获取飞行轨迹失败')
+  }
+  return body.data ?? []
 }

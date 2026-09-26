@@ -1,5 +1,10 @@
 import { apiGet, expectData, type QueryOf } from '../contract'
-import type { AdminOrderVo, AdminPageVo, AdminTaskVo } from '../../types/admin'
+import type {
+  AdminComplaintList,
+  AdminOrderVo,
+  AdminPageVo,
+  AdminTaskVo,
+} from '../../types/admin'
 
 // 1B-5b：运营端业务查询统一走 t25 管理端 API（/admin/orders、/admin/tasks，@RequireRole(2)）
 // 请求参数类型直接取自契约（QueryOf），信封与字段见 src/api/contract.ts。
@@ -33,7 +38,16 @@ export const getAdminTasks = async (
 export const getAdminTaskDetail = async (taskNum: string): Promise<AdminTaskVo> =>
   expectData(await apiGet('/admin/tasks/{taskNum}', { path: { taskNum } }), '查询任务详情失败')
 
-/** 订单状态元数据（契约清单 C5：0-5 全量，补全 4 已完成 / 5 待验收）；label 以后端 orderStatusDesc 为准，此处为回退 */
+/** 契约查询参数：GET /admin/complaint/list */
+export type AdminComplaintListParams = NonNullable<QueryOf<'/admin/complaint/list', 'get'>>
+
+/** GET /admin/complaint/list：投诉分页列表（首页「待处理争议」指标与待办用） */
+export const getAdminComplaints = async (
+  params: AdminComplaintListParams = {},
+): Promise<AdminComplaintList> =>
+  expectData(await apiGet('/admin/complaint/list', { params }), '查询投诉列表失败')
+
+/** 订单状态元数据（契约 C5：0-5；补 6 争议中，与 AdminOrderVo.orderStatusCode 契约一致）；label 以后端 orderStatusDesc 为准，此处为回退 */
 export const ORDER_STATUS_META: Record<
   number,
   { label: string; tagType: 'warning' | 'success' | 'info' | 'danger' | 'primary' }
@@ -44,6 +58,7 @@ export const ORDER_STATUS_META: Record<
   3: { label: '已退款', tagType: 'danger' },
   4: { label: '已完成', tagType: 'success' },
   5: { label: '待验收', tagType: 'warning' },
+  6: { label: '争议中', tagType: 'danger' },
 }
 
 /** 任务状态元数据（C5：IDLE/IN_PROGRESS/COMPLETED） */
