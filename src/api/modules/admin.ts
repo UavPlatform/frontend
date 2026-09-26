@@ -1,5 +1,5 @@
 import { apiGet, apiPost, expectData } from '../contract'
-import type { AdminLoginRequest, AdminStatistics, LiveUav, UavDetail } from '../../types/admin'
+import type { AdminLoginRequest, AdminLogFile, AdminStatistics, LiveUav, UavDetail } from '../../types/admin'
 import { setStoredSession } from '../session'
 
 // 管理端接口。请求/响应结构一律来自 OpenAPI 契约（src/api/contract.ts），不再手写信封与字段。
@@ -93,5 +93,18 @@ export const getApplicationLogs = async (lines: number = 100): Promise<string[]>
 export const getErrorLogs = async (lines: number = 100): Promise<string[]> => {
   const body = await apiGet('/admin/logs/error', { params: { lines } })
   const data = expectData(body, '获取错误日志失败')
+  return data.logs ?? []
+}
+
+/** GET /admin/logs/files → Result<LogFileVO[]>：日志目录条目（path 留空表示根目录） */
+export const getLogFiles = async (path?: string): Promise<AdminLogFile[]> => {
+  const body = await apiGet('/admin/logs/files', { params: { path } })
+  return expectData(body, '获取日志文件列表失败')
+}
+
+/** GET /admin/logs/read → Result<LogVO>：指定日志文件的最后 N 行 */
+export const readLogFile = async (file: string, lines: number = 200): Promise<string[]> => {
+  const body = await apiGet('/admin/logs/read', { params: { file, lines } })
+  const data = expectData(body, '读取日志文件失败')
   return data.logs ?? []
 }

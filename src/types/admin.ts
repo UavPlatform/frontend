@@ -13,6 +13,9 @@ export type LiveUav = Schemas['LiveUavVO']
 /** 契约 AdminStatisticsVO：GET /admin/uav/statistics */
 export type AdminStatistics = Schemas['AdminStatisticsVO']
 
+/** 契约 LogFileVO：GET /admin/logs/files 列表项 */
+export type AdminLogFile = Schemas['LogFileVO']
+
 /** 契约 AdminDto：POST /admin/login 请求体 */
 export type AdminLoginRequest = Schemas['AdminDto']
 

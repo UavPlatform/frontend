@@ -17,7 +17,7 @@ const route = useRoute()
 const router = useRouter()
 
 const orderNum = computed(() => String(route.params.orderNum ?? ''))
-const { order, task, liveDetail, match, loading } = useOrderDetail(orderNum)
+const { order, task, liveDetail, match, loading, reload } = useOrderDetail(orderNum)
 
 type DetailTab = 'manage' | 'supervise'
 
@@ -129,7 +129,13 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
           @tab-click="userSwitched = true"
         >
           <el-tab-pane label="订单管理" name="manage" lazy>
-            <OrderManagePanel v-if="order" :order="order" :task="task" :match="match" />
+            <OrderManagePanel
+              v-if="order"
+              :order="order"
+              :task="task"
+              :match="match"
+              @order-changed="reload"
+            />
           </el-tab-pane>
           <el-tab-pane v-if="isFlying" label="任务监管" name="supervise" lazy>
             <SupervisionPanel

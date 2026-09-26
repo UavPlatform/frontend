@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { approveAdminComplaint, rejectAdminComplaint } from '../../api/modules/admin-query'
 import {
   buildMatchTimeline,
   buildPricing,
@@ -16,13 +18,17 @@ import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../../types/admi
 
 /**
  * 订单管理 Tab（REQ-FRONTEND-001 §2a）：撮合时间线 → 计价 → 应征 → 证据 → 争议 → 关联主体。
- * 金额一律只读（ADR-0003 禁止改价）；争议区块只做数据展示，处置交互由 TASK-FRONTEND-005 嵌入。
+ * 金额一律只读（ADR-0003 禁止改价）；争议区块内对 PENDING 投诉做批准/驳回处置
+ * （TASK-FRONTEND-005），处置成功后经 order-changed 让父层刷新订单状态
+ * （批准 → 已退款、驳回 → 已完成，终态语义以后端为准）。
  */
 const props = defineProps<{
   order: AdminOrderVo
   task?: AdminTaskVo
   match: MatchProgressFields
 }>()
+
+const emit = defineEmits<{ (e: 'order-changed'): void }>()
 
 const APPLICATION_STATUS_LABELS: Record<string, string> = {
   ACTIVE: '应征中',
@@ -142,8 +148,10 @@ const evidenceRows = computed(() =>
 
 const complaintRows = computed(() =>
   (complaints.value ?? []).map((item) => ({
+    id: item.id ?? 0,
     status: COMPLAINT_STATUS_LABELS[item.status ?? ''] ?? item.status ?? '—',
     statusType: COMPLAINT_STATUS_TAG[item.status ?? ''] ?? 'info',
+    pending: item.status === 'PENDING',
     reason: COMPLAINT_REASON_LABELS[item.reason ?? ''] ?? item.reason ?? '—',
     description: item.description || '—',
     time: item.createTime || '—',
@@ -151,6 +159,42 @@ const complaintRows = computed(() =>
     refund: item.refundAmount != null ? `¥${Number(item.refundAmount).toFixed(2)}` : '—',
   })),
 )
+
+/* ------------------------------------------------------------------
+ * 争议处置（TASK-FRONTEND-005）：仅 PENDING 投诉可批准/驳回。
+ * adminNote 草稿按投诉 ID 记录；驳回理由为契约必填，批准备注可选。
+ * 成功后重拉投诉列表并 emit order-changed，由订单详情刷新订单状态。
+ * ------------------------------------------------------------------ */
+
+const noteDrafts = ref<Record<number, string>>({})
+const actingId = ref<number | null>(null)
+
+const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
+  if (actingId.value !== null) return
+  const note = (noteDrafts.value[id] ?? '').trim()
+  if (action === 'reject' && !note) {
+    ElMessage.warning('驳回投诉需填写驳回理由')
+    return
+  }
+
+  actingId.value = id
+  try {
+    if (action === 'approve') {
+      await approveAdminComplaint(id, note || undefined)
+      ElMessage.success('已批准投诉，退款已发起')
+    } else {
+      await rejectAdminComplaint(id, note)
+      ElMessage.success('已驳回投诉，订单恢复为已完成')
+    }
+    delete noteDrafts.value[id]
+    await loadSideData()
+    emit('order-changed')
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '投诉处置失败')
+  } finally {
+    actingId.value = null
+  }
+}
 </script>
 
 <template>
@@ -248,16 +292,18 @@ const complaintRows = computed(() =>
       </el-table>
     </section>
 
-    <!-- 争议（数据展示；处置交互挂载点留给 TASK-FRONTEND-005） -->
+    <!-- 争议（含批准/驳回处置，TASK-FRONTEND-005） -->
     <section class="panel-card p-5" v-loading="complaints === undefined">
       <div class="section-title">争议</div>
-      <div class="section-hint">投诉数据来自 /admin/complaint/list，按订单号过滤。</div>
-      <!-- TASK-FRONTEND-005：批准/驳回 + adminNote 处置交互在此区块嵌入 -->
+      <div class="section-hint">
+        投诉数据来自 /admin/complaint/list，按订单号过滤；待处理投诉可批准（自动退款）或驳回
+        （订单恢复为已完成），处置后订单状态随之刷新。
+      </div>
 
       <div v-if="complaints === null" class="block-note">投诉数据暂不可用</div>
       <div v-else-if="complaints?.length === 0" class="block-note">暂无投诉记录</div>
       <div v-else class="mt-3 flex flex-col gap-3">
-        <article v-for="row in complaintRows" :key="row.time + row.reason" class="complaint-card">
+        <article v-for="row in complaintRows" :key="row.id || row.time + row.reason" class="complaint-card">
           <div class="flex flex-wrap items-center gap-2">
             <el-tag size="small" :type="row.statusType" effect="plain">{{ row.status }}</el-tag>
             <span class="step-label">{{ row.reason }}</span>
@@ -265,6 +311,38 @@ const complaintRows = computed(() =>
           </div>
           <p class="complaint-desc">{{ row.description }}</p>
           <div class="text-xs text-[#606266]">处理备注：{{ row.adminNote }} · 退款金额：{{ row.refund }}</div>
+
+          <div v-if="row.pending" class="complaint-actions">
+            <el-input
+              v-model="noteDrafts[row.id]"
+              type="textarea"
+              :rows="2"
+              maxlength="500"
+              show-word-limit
+              placeholder="处理备注（驳回时必填驳回理由，批准时可选）"
+            />
+            <div class="mt-2 flex flex-wrap gap-2">
+              <el-button
+                type="primary"
+                size="small"
+                :loading="actingId === row.id"
+                :disabled="actingId !== null && actingId !== row.id"
+                @click="resolveComplaint(row.id, 'approve')"
+              >
+                批准（退款）
+              </el-button>
+              <el-button
+                type="danger"
+                size="small"
+                plain
+                :loading="actingId === row.id"
+                :disabled="actingId !== null && actingId !== row.id"
+                @click="resolveComplaint(row.id, 'reject')"
+              >
+                驳回
+              </el-button>
+            </div>
+          </div>
         </article>
       </div>
     </section>
@@ -342,5 +420,11 @@ const complaintRows = computed(() =>
   margin-top: 0.4rem;
   font-size: 0.9rem;
   color: #303133;
+}
+
+.complaint-actions {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed #fde2e2;
 }
 </style>

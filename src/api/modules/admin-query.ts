@@ -1,4 +1,4 @@
-import { apiGet, apiGetPending, expectData, type QueryOf } from '../contract'
+import { apiGet, apiPost, apiGetPending, expectData, expectSuccess, type QueryOf } from '../contract'
 import type {
   AdminComplaintList,
   AdminOrderVo,
@@ -50,6 +50,27 @@ export const getAdminComplaints = async (
   params: AdminComplaintListParams = {},
 ): Promise<AdminComplaintList> =>
   expectData(await apiGet('/admin/complaint/list', { params }), '查询投诉列表失败')
+
+/**
+ * POST /admin/complaint/{id}/approve：批准投诉（后端自动发起微信退款，订单状态变更为已退款）。
+ * adminNote 处理备注可选；成功返回后由调用方刷新投诉与订单状态。
+ */
+export const approveAdminComplaint = async (id: number, adminNote?: string): Promise<void> => {
+  const body = await apiPost('/admin/complaint/{id}/approve', {
+    path: { id },
+    params: { adminNote },
+  })
+  expectSuccess(body, '批准投诉失败')
+}
+
+/** POST /admin/complaint/{id}/reject：驳回投诉（订单恢复为已完成）；契约要求驳回理由必填 */
+export const rejectAdminComplaint = async (id: number, adminNote: string): Promise<void> => {
+  const body = await apiPost('/admin/complaint/{id}/reject', {
+    path: { id },
+    params: { adminNote },
+  })
+  expectSuccess(body, '驳回投诉失败')
+}
 
 /** 订单状态元数据（契约 C5：0-5；补 6 争议中，与 AdminOrderVo.orderStatusCode 契约一致）；label 以后端 orderStatusDesc 为准，此处为回退 */
 export const ORDER_STATUS_META: Record<
