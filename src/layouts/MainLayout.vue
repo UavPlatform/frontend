@@ -33,8 +33,15 @@ const secondaryItem = { label: '系统日志', icon: Notebook, route: 'system' }
 
 const userName = computed(() => getStoredSession()?.user.displayName ?? '管理员')
 
+// 详情路由归位所属一级菜单（/users/:id → 用户、/pilots/:id → 飞手），侧栏激活态不丢
+const MENU_FOR_ROUTE: Record<string, string> = {
+  'user-detail': 'users',
+  'pilot-detail': 'pilots',
+}
+
 const activeRoute = computed(() => {
-  return menuItems.find((item) => item.route === route.name)?.route ?? ''
+  const menu = MENU_FOR_ROUTE[String(route.name)] ?? route.name
+  return menuItems.find((item) => item.route === menu)?.route ?? ''
 })
 
 const handleLogout = () => {

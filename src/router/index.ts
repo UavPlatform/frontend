@@ -38,9 +38,23 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    // 用户详情（TASK-FRONTEND-004）：基本信息 + 关联订单摘要
+    path: '/users/:id',
+    name: 'user-detail',
+    component: () => import('../views/UserDetailView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/pilots',
     name: 'pilots',
     component: () => import('../views/PilotsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    // 飞手详情（TASK-FRONTEND-004）：绑定无人机 + 启停开关 + 关联订单（ADR-0004：无人机不设一级菜单）
+    path: '/pilots/:id',
+    name: 'pilot-detail',
+    component: () => import('../views/PilotDetailView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {

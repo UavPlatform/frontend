@@ -43,12 +43,17 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
 ]
 
 /**
- * 后端 spec 已提供、本仓 vendor 契约（openapi/）尚未收录的端点：经 `apiGetPending` 调用，
- * 端点级取数集中在 src/api/modules/order-supervision.ts。
+ * 后端 spec 已提供、本仓 vendor 契约（openapi/）尚未收录的端点：经 `apiGetPending` 调用。
+ * 目前分两处：撮合侧数据在 src/api/modules/order-supervision.ts，
+ * 主体查询（/admin/users、/admin/pilots，TASK-FRONTEND-004）在 src/api/modules/admin-query.ts。
  * TASK-PLATFORM-001 vendor 同步后必须迁入 CALLED_OPERATIONS（下方「尚未 vendor」断言会失败强制迁移）。
  */
 const PENDING_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> = [
   ['get', '/task/{taskNum}/applications'],
+  ['get', '/admin/users'],
+  ['get', '/admin/users/{userId}'],
+  ['get', '/admin/pilots'],
+  ['get', '/admin/pilots/{userId}'],
 ]
 
 /** apiGetPending('/x', …) 调用点（与 PENDING_OPERATIONS 双向一致） */

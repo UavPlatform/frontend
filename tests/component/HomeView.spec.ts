@@ -199,6 +199,27 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
     expect(labels.some((label) => label.includes('详情'))).toBe(true)
   })
 
+  it('飞行卡主体链接带定位参数跳实体列表（TASK-FRONTEND-004）', async () => {
+    const w = await mountHome()
+
+    const userLink = w
+      .find('.flying-card')
+      .findAll('button')
+      .find((button) => button.text().includes('用户 王五'))
+    await userLink!.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('users'))
+    expect(router.currentRoute.value.query).toEqual({ id: '1' })
+
+    await router.push('/')
+    const pilotLink = w
+      .find('.flying-card')
+      .findAll('button')
+      .find((button) => button.text().includes('飞手 李四'))
+    await pilotLink!.trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('pilots'))
+    expect(router.currentRoute.value.query).toEqual({ q: '李四' })
+  })
+
   it('侧栏快捷入口、待办与今日新发 Top5', async () => {
     const w = await mountHome()
 

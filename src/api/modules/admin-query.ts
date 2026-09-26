@@ -1,9 +1,13 @@
-import { apiGet, expectData, type QueryOf } from '../contract'
+import { apiGet, apiGetPending, expectData, type QueryOf } from '../contract'
 import type {
   AdminComplaintList,
   AdminOrderVo,
   AdminPageVo,
+  AdminPilotDetailVo,
+  AdminPilotVo,
   AdminTaskVo,
+  AdminUserDetailVo,
+  AdminUserVo,
 } from '../../types/admin'
 
 // 1B-5b：运营端业务查询统一走 t25 管理端 API（/admin/orders、/admin/tasks，@RequireRole(2)）
@@ -70,3 +74,66 @@ export const TASK_STATUS_META: Record<
   IN_PROGRESS: { label: '执行中', tagType: 'warning' },
   COMPLETED: { label: '执行完毕', tagType: 'success' },
 }
+
+/* ------------------------------------------------------------------
+ * 主体查询（TASK-FRONTEND-004：/users、/pilots 列表与详情）
+ *
+ * 契约渐进：后端 TASK-BACKEND-006 已提供这 4 个端点，本仓 vendor 契约（openapi/）尚未收录
+ * → 走 `apiGetPending`，并在契约门禁 tests/unit/openapi-contract.spec.ts 的 PENDING_OPERATIONS 登记。
+ * data 类型用单层泛型传入（门禁按 `apiGetPending<…>(` 正则采集调用点，嵌套泛型会漏采）。
+ * ------------------------------------------------------------------ */
+
+/** GET /admin/users 查询参数（page 从 0 起；keyword 昵称模糊；status 1 正常 / 0 停用） */
+export type AdminUserListParams = {
+  page?: number
+  size?: number
+  keyword?: string
+  status?: number
+}
+
+/** GET /admin/pilots 查询参数（page 从 0 起；keyword 昵称模糊） */
+export type AdminPilotListParams = {
+  page?: number
+  size?: number
+  keyword?: string
+}
+
+/** 响应 data 类型（信封由 apiGetPending 的第二个泛型默认补出） */
+type AdminUserPageData = AdminPageVo<AdminUserVo>
+type AdminPilotPageData = AdminPageVo<AdminPilotVo>
+
+/** GET /admin/users：注册用户分页列表（含名下订单数） */
+export const getAdminUsers = async (
+  params: AdminUserListParams = {},
+): Promise<AdminPageVo<AdminUserVo>> => {
+  const page = expectData(
+    await apiGetPending<AdminUserPageData>('/admin/users', { params }),
+    '查询用户失败',
+  )
+  return { ...page, content: page.content ?? [] }
+}
+
+/** GET /admin/users/{userId}：基本信息 + 关联订单摘要；飞手 ID 或不存在 → 业务错误 */
+export const getAdminUserDetail = async (userId: number | string): Promise<AdminUserDetailVo> =>
+  expectData(
+    await apiGetPending<AdminUserDetailVo>('/admin/users/{userId}', { path: { userId } }),
+    '查询用户详情失败',
+  )
+
+/** GET /admin/pilots：注册飞手分页列表（含无人机数/在线数/完成单数） */
+export const getAdminPilots = async (
+  params: AdminPilotListParams = {},
+): Promise<AdminPageVo<AdminPilotVo>> => {
+  const page = expectData(
+    await apiGetPending<AdminPilotPageData>('/admin/pilots', { params }),
+    '查询飞手失败',
+  )
+  return { ...page, content: page.content ?? [] }
+}
+
+/** GET /admin/pilots/{userId}：基本信息 + 绑定无人机表 + 关联订单 */
+export const getAdminPilotDetail = async (userId: number | string): Promise<AdminPilotDetailVo> =>
+  expectData(
+    await apiGetPending<AdminPilotDetailVo>('/admin/pilots/{userId}', { path: { userId } }),
+    '查询飞手详情失败',
+  )

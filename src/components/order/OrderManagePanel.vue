@@ -51,7 +51,7 @@ const COMPLAINT_STATUS_TAG: Record<string, 'warning' | 'success' | 'info'> = {
 
 const router = useRouter()
 
-/** 关联主体跳转（目标详情页由 TASK-FRONTEND-004 承接，先落到实体列表并带定位参数） */
+/** 关联主体跳转：带定位参数落到实体列表（用户按 ID 高亮、飞手按昵称筛选），行内「详情」进主体详情页 */
 const go = (to: RouteLocationRaw) => {
   void router.push(to).catch(() => undefined)
 }
@@ -272,7 +272,7 @@ const complaintRows = computed(() =>
     <!-- 关联主体 -->
     <section class="panel-card p-5">
       <div class="section-title">关联主体</div>
-      <div class="section-hint">目标详情页由 TASK-FRONTEND-004 承接，当前先带定位参数落到实体列表。</div>
+      <div class="section-hint">带定位参数落到实体列表（用户按 ID 高亮、飞手按昵称筛选），点击目标行即可进入主体详情。</div>
       <div class="mt-3 flex flex-wrap gap-2">
         <el-button
           @click="go({ name: 'users', query: props.order.userId ? { id: String(props.order.userId) } : {} })"

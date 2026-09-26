@@ -320,10 +320,18 @@ const openOrderDetail = (orderNum?: string) => {
               </div>
 
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#606266]">
-                <button type="button" class="subject-link" @click="go({ name: 'users' })">
+                <button
+                  type="button"
+                  class="subject-link"
+                  @click="go({ name: 'users', query: card.task.userId ? { id: String(card.task.userId) } : {} })"
+                >
                   用户 {{ card.task.ownerName || '—' }}
                 </button>
-                <button type="button" class="subject-link" @click="go({ name: 'pilots' })">
+                <button
+                  type="button"
+                  class="subject-link"
+                  @click="go({ name: 'pilots', query: card.task.riderName ? { q: card.task.riderName } : {} })"
+                >
                   飞手 {{ card.task.riderName || '—' }}
                 </button>
                 <span>距离 {{ card.task.totalDistance != null ? `${card.task.totalDistance.toFixed(1)} m` : '—' }}</span>
