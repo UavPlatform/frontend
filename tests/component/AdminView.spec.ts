@@ -88,7 +88,6 @@ describe('AdminView 与运营台主框架融合（1B-5b U5）', () => {
 
     const text = wrapper.text()
     expect(text).toContain('管理员中心')
-    expect(text).toContain('无人机总览') // MainLayout 侧边菜单
     expect(text).toContain('退出登录') // 统一登出入口（原独立深色页头已移除）
     expect(text).toContain('3') // totalUavs
     expect(text).toContain('drone_DJI-001') // 直播中无人机表

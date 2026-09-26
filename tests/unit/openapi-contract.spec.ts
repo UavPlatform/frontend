@@ -30,7 +30,6 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['get', '/admin/orders/{orderNum}'],
   ['get', '/admin/tasks'],
   ['get', '/admin/tasks/{taskNum}'],
-  ['get', '/user/records'],
   ['get', '/webUav/getUav'],
   ['get', '/webUav/status'],
   ['post', '/live/req'],

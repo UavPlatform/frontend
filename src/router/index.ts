@@ -1,30 +1,38 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import { getStoredSession, hasSessionToken } from '../api/session'
 
-// Q7=A：运营台收敛为管理员单入口——业务面全部 requiresAdmin，普通用户登录入口已移除（/login 仅重定向）
+// REQ-FRONTEND-001：吊运监管平台壳层——四实体导航（首页/订单/用户/飞手）+ 次级系统页。
+// 旧一级路由（/records、/ 首页机队看板、裸 /operate/:deviceId、/admin/center）已随 ADR-0004 移除。
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    name: 'dashboard',
-    component: () => import('../views/DashboardView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: '/operate/:deviceId',
-    name: 'operate',
-    component: () => import('../views/OperateView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: '/records',
-    name: 'records',
-    component: () => import('../views/RecordsView.vue'),
+    name: 'home',
+    component: () => import('../views/HomeView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/orders',
     name: 'orders',
     component: () => import('../views/OrderView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/users',
+    name: 'users',
+    component: () => import('../views/UsersView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/pilots',
+    name: 'pilots',
+    component: () => import('../views/PilotsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/system',
+    name: 'system',
+    component: () => import('../views/SystemView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
@@ -38,10 +46,9 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/AdminLoginView.vue'),
   },
   {
-    path: '/admin/center',
-    name: 'admin-center',
-    component: () => import('../views/AdminView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    // 旧书签（/records、/operate/:deviceId、/admin/center 等）回落首页
+    path: '/:pathMatch(.*)*',
+    redirect: { name: 'home' },
   },
 ]
 
@@ -63,7 +70,7 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'admin-login' && authed && isAdmin) {
-    return { name: 'admin-center' }
+    return { name: 'home' }
   }
 
   return true

@@ -216,7 +216,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <MainLayout title="任务/订单" subtitle="全平台任务与订单状态管理（管理员视图）。">
+  <MainLayout title="订单" subtitle="全平台任务与订单状态管理（管理员视图）。">
     <div class="flex flex-col gap-4">
       <el-tabs v-model="activeTab" class="manage-tabs">
         <el-tab-pane label="订单管理" name="orders">

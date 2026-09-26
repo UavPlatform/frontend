@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  Monitor,
-  Operation,
-  Setting,
+  Avatar,
+  HomeFilled,
+  Notebook,
   SwitchButton,
-  DocumentCopy,
+  Tickets,
+  User,
 } from '@element-plus/icons-vue'
 import { logout } from '../api/modules/auth'
 import { getStoredSession } from '../api/session'
@@ -19,25 +20,21 @@ defineProps<{
 const router = useRouter()
 const route = useRoute()
 
-// 1B-5b（Q6/Q7=A）：运营台收敛为管理员单入口——占位菜单（视频监控/告警中心）移除，
-// 航线规划入口随 RouteView 移除，「飞行任务」更名「任务/订单」
+// REQ-FRONTEND-001：侧边栏四项主导航（首页/订单/用户/飞手），无人机不设一级菜单
 const menuItems = [
-  { label: '无人机总览', icon: Monitor, route: 'dashboard' },
-  { label: '历史记录', icon: DocumentCopy, route: 'records' },
-  { label: '任务/订单', icon: Operation, route: 'orders' },
-  { label: '管理员中心', icon: Setting, route: 'admin-center' },
+  { label: '首页', icon: HomeFilled, route: 'home' },
+  { label: '订单', icon: Tickets, route: 'orders' },
+  { label: '用户', icon: User, route: 'users' },
+  { label: '飞手', icon: Avatar, route: 'pilots' },
 ]
+
+// 次级入口：系统日志（非主监管路径，放页脚）
+const secondaryItem = { label: '系统日志', icon: Notebook, route: 'system' }
 
 const userName = computed(() => getStoredSession()?.user.displayName ?? '管理员')
 
-const getActiveItem = () => {
-  return menuItems.find(item => item.route === route.name)?.route || 'dashboard'
-}
-
-const activeRoute = ref(getActiveItem())
-
-watch(() => route.name, () => {
-  activeRoute.value = getActiveItem()
+const activeRoute = computed(() => {
+  return menuItems.find((item) => item.route === route.name)?.route ?? ''
 })
 
 const handleLogout = () => {
@@ -51,8 +48,8 @@ const handleLogout = () => {
     <div class="mx-auto flex max-w-[1600px] gap-4">
       <aside class="panel-card hidden min-h-[calc(100vh-3rem)] w-[260px] shrink-0 p-5 lg:flex lg:flex-col">
         <div class="border-b border-[#ebeef5] pb-5">
-          <div class="text-xs uppercase tracking-[0.28em] text-[#909399]">UAV Console</div>
-          <div class="mt-3 text-2xl font-800 tracking-tight text-[#303133]">空域指挥台</div>
+          <div class="text-xs uppercase tracking-[0.28em] text-[#909399]">Supervision</div>
+          <div class="mt-3 text-2xl font-800 tracking-tight text-[#303133]">吊运监管平台</div>
         </div>
 
         <div class="mt-5 flex-1 space-y-2">
@@ -62,27 +59,39 @@ const handleLogout = () => {
             class="menu-item"
             :class="{ 'menu-item-active': item.route === activeRoute }"
             type="button"
-            @click="item.route && router.push({ name: item.route })"
-            :disabled="!item.route"
+            @click="router.push({ name: item.route })"
           >
             <el-icon class="text-lg">
               <component :is="item.icon" />
             </el-icon>
             <span>{{ item.label }}</span>
-            <el-tag v-if="!item.route" size="small" type="info" effect="plain">规划中</el-tag>
           </button>
         </div>
 
         <div class="border-t border-[#ebeef5] pt-4">
-          <div class="text-sm font-700 text-[#303133]">{{ userName }}</div>
-          <div class="mt-1 text-xs text-[#909399]">控制中心值守席位</div>
+          <button
+            class="menu-item"
+            :class="{ 'menu-item-active': route.name === secondaryItem.route }"
+            type="button"
+            @click="router.push({ name: secondaryItem.route })"
+          >
+            <el-icon class="text-lg">
+              <component :is="secondaryItem.icon" />
+            </el-icon>
+            <span>{{ secondaryItem.label }}</span>
+          </button>
+
+          <div class="mt-3 px-3.5">
+            <div class="text-sm font-700 text-[#303133]">{{ userName }}</div>
+            <div class="mt-1 text-xs text-[#909399]">监管值守席位</div>
+          </div>
         </div>
       </aside>
 
       <div class="flex min-h-[calc(100vh-3rem)] min-w-0 flex-1 flex-col gap-4">
         <header class="panel-card flex flex-col gap-4 p-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div class="text-xs uppercase tracking-[0.24em] text-[#909399]">Flight Control</div>
+            <div class="text-xs uppercase tracking-[0.24em] text-[#909399]">Supervision</div>
             <div class="mt-2 text-3xl font-800 tracking-tight text-[#303133]">{{ title }}</div>
             <div v-if="subtitle" class="mt-2 text-sm leading-6 text-[#606266]">
               {{ subtitle }}
@@ -99,16 +108,22 @@ const handleLogout = () => {
           </div>
         </header>
 
-        <div class="panel-card flex gap-2 overflow-x-auto p-3 lg:hidden">
+        <div class="panel-card flex items-center gap-2 overflow-x-auto p-3 lg:hidden">
           <div
             v-for="item in menuItems"
             :key="item.label"
             class="rounded-full px-4 py-2 text-sm whitespace-nowrap cursor-pointer"
             :class="item.route === activeRoute ? 'bg-[#ecf5ff] text-[#303133]' : 'bg-[#f5f7fa] text-[#606266]'"
-            @click="item.route && router.push({ name: item.route })"
-            :style="!item.route && { cursor: 'not-allowed', opacity: 0.6 }"
+            @click="router.push({ name: item.route })"
           >
             {{ item.label }}
+          </div>
+          <div
+            class="rounded-full px-4 py-2 text-sm whitespace-nowrap cursor-pointer"
+            :class="route.name === secondaryItem.route ? 'bg-[#ecf5ff] text-[#303133]' : 'bg-transparent text-[#909399]'"
+            @click="router.push({ name: secondaryItem.route })"
+          >
+            {{ secondaryItem.label }}
           </div>
         </div>
 
