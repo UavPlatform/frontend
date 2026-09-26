@@ -385,7 +385,7 @@ const openDetailPage = (row: OrderRow) => {
     .catch(() => undefined)
 }
 
-/** 飞行中行的「监管」→ 任务监管全屏路由（视图未落地前重定向到订单详情） */
+/** 飞行中行的「监管」→ 任务监管全屏路由（SuperviseView，只读监看） */
 const openSupervise = (row: OrderRow) => {
   if (!row.orderNum) {
     ElMessage.warning('该订单缺少订单号，无法进入任务监管')

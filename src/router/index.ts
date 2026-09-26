@@ -18,17 +18,17 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
-    // 订单详情（TASK-FRONTEND-003 会在其上分「管理 / 监管」双 Tab；本任务先保证跳转目标存在）
+    // 订单详情：顶栏摘要 + 双 Tab（订单管理 / 任务监管，TASK-FRONTEND-003）
     path: '/orders/:orderNum',
     name: 'order-detail',
     component: () => import('../views/OrderDetailView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
-    // 任务监管全屏（ADR-0004）：视图由 TASK-FRONTEND-003 承接，当前先落到订单详情
+    // 任务监管全屏（ADR-0004）：只读监看——视频最大化 + 可收起信息面板，无启停直播控制
     path: '/orders/:orderNum/supervise',
     name: 'order-supervise',
-    redirect: (to) => ({ name: 'order-detail', params: { orderNum: String(to.params.orderNum) } }),
+    component: () => import('../views/SuperviseView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {

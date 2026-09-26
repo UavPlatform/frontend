@@ -20,6 +20,21 @@ vi.mock('../../src/api/modules/admin-query', async () => {
   return { ...actual, getAdminOrderDetail, getAdminTaskDetail }
 })
 
+// 本 spec 只验摘要落点：双模式侧载数据（应征/证据/投诉/图传上下文）一律降级为空，
+// 避免真实 HTTP；双模式行为见 tests/component/OrderDualMode.spec.ts
+vi.mock('../../src/api/modules/order-supervision', async () => {
+  const actual = (await vi.importActual(
+    '../../src/api/modules/order-supervision',
+  )) as Record<string, unknown>
+  return {
+    ...actual,
+    fetchTaskLiveDetail: vi.fn().mockResolvedValue(null),
+    fetchTaskApplications: vi.fn().mockResolvedValue([]),
+    fetchTaskEvidence: vi.fn().mockResolvedValue([]),
+    fetchOrderComplaints: vi.fn().mockResolvedValue([]),
+  }
+})
+
 const orderFixture: AdminOrderVo = {
   orderNum: 'ORD-A',
   userId: 1,

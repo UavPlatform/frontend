@@ -8,13 +8,9 @@ import { getAdminComplaints } from '../api/modules/admin-query'
 import { scanInProgressTasks, scanOrders } from '../api/modules/admin-scan'
 import { getRegisteredRiders } from '../api/modules/rider'
 import { getOrderTrajectory } from '../api/modules/uav'
-import type {
-  AdminComplaint,
-  AdminOrderVo,
-  AdminTaskVo,
-  OrderGpsPoint,
-} from '../types/admin'
+import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../types/admin'
 import { formatClock, formatDateTime, formatDuration } from '../utils/date'
+import { summarizeTrajectory, type TelemetrySummary } from '../utils/telemetry'
 
 /**
  * 首页看板（REQ-FRONTEND-001 §1）：
@@ -25,17 +21,9 @@ import { formatClock, formatDateTime, formatDuration } from '../utils/date'
  */
 const router = useRouter()
 
-interface Telemetry {
-  altitude?: number
-  speed?: number
-  battery?: number
-  reportedAt?: number
-  startedAt?: number
-}
-
 interface FlyingCard {
   task: AdminTaskVo
-  telemetry?: Telemetry
+  telemetry?: TelemetrySummary
 }
 
 interface TodoItem {
@@ -187,25 +175,6 @@ const refreshTelemetry = async () => {
       }
     }),
   )
-}
-
-const summarizeTrajectory = (points: OrderGpsPoint[]): Telemetry | undefined => {
-  if (points.length === 0) {
-    return undefined
-  }
-  const sorted = [...points].sort((left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0))
-  const first = sorted[0]
-  const last = sorted[sorted.length - 1]
-  if (!first || !last) {
-    return undefined
-  }
-  return {
-    altitude: last.altitude,
-    speed: last.speed,
-    battery: last.battery,
-    reportedAt: last.timestamp,
-    startedAt: first.timestamp,
-  }
 }
 
 let telemetryTimer: ReturnType<typeof setInterval> | undefined

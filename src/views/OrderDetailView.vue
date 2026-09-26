@@ -1,68 +1,60 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
-import {
-  ORDER_STATUS_META,
-  TASK_STATUS_META,
-  getAdminOrderDetail,
-  getAdminTaskDetail,
-} from '../api/modules/admin-query'
-import type { AdminOrderVo, AdminTaskVo } from '../types/admin'
+import OrderManagePanel from '../components/order/OrderManagePanel.vue'
+import SupervisionPanel from '../components/order/SupervisionPanel.vue'
+import { ORDER_STATUS_META, TASK_STATUS_META } from '../api/modules/admin-query'
+import { useOrderDetail } from '../composables/useOrderDetail'
 
 /**
- * 订单详情（REQ-FRONTEND-001 §2.2）。
- * 双模式 Tab（任务监管 / 订单管理）与全屏 /supervise 由 TASK-FRONTEND-003 承接，
- * 本页先提供订单摘要 + 关联任务（飞手、任务状态、操作提示），
- * 作为订单列表行点击与首页「任务监管」按钮的落点。
+ * 订单详情（REQ-FRONTEND-001 §2.2）双模式：
+ *   订单管理 —— 撮合时间线 / 计价 / 应征 / 证据 / 争议 / 关联主体；
+ *   任务监管 —— 图传只读 + 遥测（仅执行中订单可见）。
+ * 默认 Tab 由任务是否执行中决定：非执行中 → 订单管理，执行中 → 任务监管（可切回）。
  */
 const route = useRoute()
 const router = useRouter()
 
 const orderNum = computed(() => String(route.params.orderNum ?? ''))
-const order = ref<AdminOrderVo>()
-const task = ref<AdminTaskVo>()
-const loading = ref(false)
+const { order, task, liveDetail, match, loading } = useOrderDetail(orderNum)
 
-let loadSeq = 0
-const load = async () => {
-  const seq = ++loadSeq
-  loading.value = true
-  try {
-    const detail = await getAdminOrderDetail(orderNum.value)
-    if (seq !== loadSeq) return
-    order.value = detail
+type DetailTab = 'manage' | 'supervise'
 
-    task.value = undefined
-    if (detail.taskNum) {
-      // 任务详情用于补齐飞手 / 任务状态 / 操作提示；查不到不阻断摘要展示
-      try {
-        const taskDetail = await getAdminTaskDetail(detail.taskNum)
-        if (seq === loadSeq) task.value = taskDetail
-      } catch (err) {
-        if (seq === loadSeq) {
-          ElMessage.warning(err instanceof Error ? err.message : '查询关联任务失败')
-        }
-      }
+const activeTab = ref<DetailTab>('manage')
+/** 用户手动切过 Tab 后，不再用状态回推默认值（避免任务状态回填覆盖用户选择） */
+const userSwitched = ref(false)
+
+const isFlying = computed(() => task.value?.taskStatus === 'IN_PROGRESS')
+
+watch(orderNum, () => {
+  userSwitched.value = false
+})
+
+watch(
+  [orderNum, isFlying],
+  () => {
+    if (userSwitched.value) return
+    const queryTab = String(route.query.tab ?? '')
+    if (queryTab === 'manage' || queryTab === 'supervise') {
+      activeTab.value = queryTab
+      return
     }
-  } catch (err) {
-    if (seq === loadSeq) {
-      order.value = undefined
-      ElMessage.error(err instanceof Error ? err.message : '查询订单详情失败')
-    }
-  } finally {
-    if (seq === loadSeq) loading.value = false
-  }
-}
-
-watch(orderNum, load, { immediate: true })
+    activeTab.value = isFlying.value ? 'supervise' : 'manage'
+  },
+  { immediate: true },
+)
 
 const backToList = () => {
   void router.push({ name: 'orders' }).catch(() => undefined)
 }
 
-const isFlying = computed(() => task.value?.taskStatus === 'IN_PROGRESS')
+const openFullscreen = () => {
+  void router
+    .push({ name: 'order-supervise', params: { orderNum: orderNum.value } })
+    .catch(() => undefined)
+}
+
 const statusTagType = computed(
   () => ORDER_STATUS_META[order.value?.orderStatusCode ?? -1]?.tagType ?? 'info',
 )
@@ -77,7 +69,7 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
 </script>
 
 <template>
-  <MainLayout title="订单详情" subtitle="订单摘要与关联任务信息。">
+  <MainLayout title="订单详情" subtitle="订单摘要与双模式视图（订单管理 / 任务监管）。">
     <section class="panel-card p-5" v-loading="loading">
       <template v-if="order">
         <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -92,6 +84,7 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
           </div>
 
           <div class="flex items-center gap-2">
+            <el-button v-if="isFlying" type="primary" @click="openFullscreen">全屏监管</el-button>
             <el-button @click="backToList">返回订单列表</el-button>
           </div>
         </div>
@@ -127,6 +120,27 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
           <el-descriptions-item label="创建时间">{{ order.createTime || '—' }}</el-descriptions-item>
           <el-descriptions-item label="更新时间">{{ order.updateTime || '—' }}</el-descriptions-item>
         </el-descriptions>
+
+        <!-- 加载完成前不挂载 Tab：否则默认值会在任务状态未知时先落到「订单管理」并预渲染其内容 -->
+        <el-tabs
+          v-if="!loading"
+          v-model="activeTab"
+          class="mt-4 detail-tabs"
+          @tab-click="userSwitched = true"
+        >
+          <el-tab-pane label="订单管理" name="manage" lazy>
+            <OrderManagePanel v-if="order" :order="order" :task="task" :match="match" />
+          </el-tab-pane>
+          <el-tab-pane v-if="isFlying" label="任务监管" name="supervise" lazy>
+            <SupervisionPanel
+              v-if="order"
+              :order="order"
+              :task="task"
+              :live-detail="liveDetail"
+              @back-to-manage="activeTab = 'manage'"
+            />
+          </el-tab-pane>
+        </el-tabs>
       </template>
 
       <el-empty
@@ -138,3 +152,9 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
     </section>
   </MainLayout>
 </template>
+
+<style scoped>
+.detail-tabs :deep(.el-tabs__header) {
+  margin-bottom: 0.5rem;
+}
+</style>

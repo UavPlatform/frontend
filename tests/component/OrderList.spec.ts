@@ -180,7 +180,7 @@ describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
     expect(router.currentRoute.value.params.orderNum).toBe('ORD-A')
   })
 
-  it('任务监管按钮经 /supervise 路由落到订单详情', async () => {
+  it('任务监管按钮进入全屏监管路由（TASK-FRONTEND-003）', async () => {
     expect(router.resolve('/orders/ORD-FLY/supervise').name).toBe('order-supervise')
 
     const wrapper = await mountList()
@@ -189,7 +189,8 @@ describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
       .find((button) => button.text().includes('监管'))!
     await superviseButton.trigger('click')
 
-    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('order-detail'))
+    // 003 落地后 /supervise 不再重定向回详情页，直达全屏监管
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('order-supervise'))
     expect(router.currentRoute.value.params.orderNum).toBe('ORD-FLY')
   })
 
