@@ -102,16 +102,16 @@ onBeforeUnmount(stopPolling)
 .panel-title {
   font-size: 1rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .empty-note {
   margin-top: 0.75rem;
   padding: 1rem;
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #fafafa;
-  color: #909399;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -123,15 +123,15 @@ onBeforeUnmount(stopPolling)
 
 .metric-cell {
   padding: 0.7rem 0.8rem;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--bg-sunken);
 }
 
 .metric-cell span {
   display: block;
   font-size: 0.78rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .metric-cell strong {
@@ -139,6 +139,6 @@ onBeforeUnmount(stopPolling)
   margin-top: 0.3rem;
   font-family: 'Fira Code', monospace;
   font-size: 0.98rem;
-  color: #303133;
+  color: var(--text-strong);
 }
 </style>

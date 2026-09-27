@@ -103,10 +103,10 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
       <section class="panel-card p-5" v-loading="loading">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xl font-700 text-[#303133]">
+            <span class="text-xl font-700 text-[var(--text-strong)]">
               {{ detail?.userName || '飞手' }}
             </span>
-            <span v-if="detail" class="text-sm text-[#909399]">ID {{ detail.userId }}</span>
+            <span v-if="detail" class="text-sm text-[var(--text-secondary)]">ID {{ detail.userId }}</span>
             <el-tag
               v-if="detail"
               :type="detail.status === 0 ? 'danger' : 'success'"
@@ -145,7 +145,7 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
       <section v-if="detail" class="panel-card p-5">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <div class="section-title">绑定无人机</div>
-          <div class="text-xs text-[#909399]">共 {{ drones.length }} 架</div>
+          <div class="text-xs text-[var(--text-secondary)]">共 {{ drones.length }} 架</div>
         </div>
 
         <el-alert
@@ -191,11 +191,11 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
                 />
                 <span
                   v-if="scope.row.available === null || scope.row.available === undefined"
-                  class="text-xs text-[#909399]"
+                  class="text-xs text-[var(--text-secondary)]"
                 >
                   未注册
                 </span>
-                <span v-else class="text-xs text-[#909399]">
+                <span v-else class="text-xs text-[var(--text-secondary)]">
                   {{ scope.row.available ? '已启用' : '已禁用' }}
                 </span>
               </div>
@@ -226,6 +226,6 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
 .section-title {
   font-size: 1.02rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 </style>

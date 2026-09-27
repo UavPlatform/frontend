@@ -76,11 +76,11 @@ const openManage = () => {
       <template v-if="order">
         <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xl font-700 text-[#303133]">#{{ order.orderNum }}</span>
+            <span class="text-xl font-700 text-[var(--text-strong)]">#{{ order.orderNum }}</span>
             <el-tag :type="statusTagType" effect="plain">{{ statusLabel }}</el-tag>
             <el-tag v-if="isFlying" type="success" effect="dark">执行中</el-tag>
-            <span class="text-lg font-700 text-[#303133]">{{ formatAmount(order.totalAmount) }}</span>
-            <span class="text-sm text-[#606266]">{{ order.taskName || '—' }}</span>
+            <span class="text-lg font-700 text-[var(--text-strong)]">{{ formatAmount(order.totalAmount) }}</span>
+            <span class="text-sm text-[var(--text-regular)]">{{ order.taskName || '—' }}</span>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -131,14 +131,14 @@ const openManage = () => {
 
 <style scoped>
 .context-panel {
-  border-color: #ebeef5;
-  background: #fafafa;
+  border-color: var(--border);
+  background: var(--bg-sunken);
 }
 
 .panel-title {
   font-size: 0.98rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .context-row {
@@ -147,11 +147,11 @@ const openManage = () => {
   justify-content: space-between;
   gap: 0.75rem;
   font-size: 0.9rem;
-  color: #606266;
+  color: var(--text-regular);
 }
 
 .context-row strong {
-  color: #303133;
+  color: var(--text-strong);
   font-weight: 600;
   text-align: right;
 }

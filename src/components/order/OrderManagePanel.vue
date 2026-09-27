@@ -286,7 +286,7 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
             <el-link v-if="scope.row.downloadUrl" :href="scope.row.downloadUrl" target="_blank" type="primary">
               查看
             </el-link>
-            <span v-else class="text-xs text-[#909399]">—</span>
+            <span v-else class="text-xs text-[var(--text-secondary)]">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -307,10 +307,10 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
           <div class="flex flex-wrap items-center gap-2">
             <el-tag size="small" :type="row.statusType" effect="plain">{{ row.status }}</el-tag>
             <span class="step-label">{{ row.reason }}</span>
-            <span class="text-xs text-[#909399]">{{ row.time }}</span>
+            <span class="text-xs text-[var(--text-secondary)]">{{ row.time }}</span>
           </div>
           <p class="complaint-desc">{{ row.description }}</p>
-          <div class="text-xs text-[#606266]">处理备注：{{ row.adminNote }} · 退款金额：{{ row.refund }}</div>
+          <div class="text-xs text-[var(--text-regular)]">处理备注：{{ row.adminNote }} · 退款金额：{{ row.refund }}</div>
 
           <div v-if="row.pending" class="complaint-actions">
             <el-input
@@ -372,40 +372,40 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 .section-title {
   font-size: 1.02rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .section-hint {
   margin-top: 0.3rem;
   font-size: 0.85rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .step-label {
   font-weight: 700;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .step-note {
   margin-top: 0.25rem;
   font-size: 0.82rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .block-note {
   margin-top: 0.85rem;
   padding: 0.9rem 1rem;
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #fafafa;
-  color: #909399;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .amount {
   font-size: 1.05rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .complaint-card {
@@ -419,7 +419,7 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 .complaint-desc {
   margin-top: 0.4rem;
   font-size: 0.9rem;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .complaint-actions {

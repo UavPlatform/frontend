@@ -185,6 +185,9 @@ const onlineLabel = (row: PilotRow) => `${row.onlineUavCount ?? 0} / ${row.uavCo
               <el-button size="small" @click.stop="openDetail(scope.row)">详情</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty description="暂无飞手数据" :image-size="80" />
+          </template>
         </el-table>
 
         <div class="mt-4 flex justify-center">
@@ -207,7 +210,7 @@ const onlineLabel = (row: PilotRow) => `${row.onlineUavCount ?? 0} / ${row.uavCo
 <style scoped>
 /* 定位行高亮：浅蓝底 + 首列色条（承接 003 的 ?q= 定位参数） */
 :deep(.el-table .locate-row) {
-  background-color: #ecf5ff;
+  background-color: var(--brand-soft);
 }
 
 :deep(.el-table .locate-row > td:first-child) {

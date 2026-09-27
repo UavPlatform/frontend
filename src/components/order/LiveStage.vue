@@ -108,16 +108,16 @@ watch(
   min-height: clamp(240px, 38vh, 460px);
   padding: 1.5rem;
   border-radius: 16px;
-  border: 1px dashed #dcdfe6;
-  background: #f5f7fa;
-  color: #909399;
+  border: 1px dashed var(--border);
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
   font-size: 0.95rem;
   text-align: center;
 }
 
 .live-placeholder.waiting {
   border-color: #fde2e2;
-  background: #fef0f0;
+  background: var(--danger-soft);
   color: #f56c6c;
 }
 

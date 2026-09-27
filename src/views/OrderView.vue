@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Download, Plus } from '@element-plus/icons-vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import {
   ORDER_STATUS_META,
@@ -400,6 +401,38 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
 
 const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
 
+/** 导出当前列表为 CSV（轻量实现，不依赖后端） */
+const handleExport = () => {
+  const header = ['订单号', '任务名称', '下单用户', '飞手', '金额', '距离', '状态', '更新时间']
+  const lines = pagedRows.value.map((row) =>
+    [
+      row.orderNum ?? '',
+      row.taskName ?? '',
+      row.ownerName ?? '',
+      row.riderName ?? '',
+      row.totalAmount ?? '',
+      row.totalDistance ?? '',
+      orderStatusLabel(row),
+      row.updateTime ?? '',
+    ]
+      .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+      .join(','),
+  )
+  const csv = ['﻿' + header.join(','), ...lines].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `订单导出_${updatedAt.value.replace(/:/g, '')}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success(`已导出 ${lines.length} 条订单`)
+}
+
+const handleCreate = () => {
+  ElMessage.info('新建订单功能待接入')
+}
+
 const orderStatusTagType = (vo: AdminOrderVo | OrderRow) =>
   ORDER_STATUS_META[vo.orderStatusCode ?? -1]?.tagType ?? 'info'
 
@@ -568,7 +601,15 @@ const openTaskDetail = async (row: AdminTaskVo) => {
               <el-button @click="resetFilters">重置</el-button>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-xs text-[#909399]">更新于 {{ updatedAt }}</span>
+              <span class="text-xs text-[var(--text-secondary)]">更新于 {{ updatedAt }}</span>
+              <el-button size="small" @click="handleExport">
+                <el-icon class="mr-1"><Download /></el-icon>
+                导出
+              </el-button>
+              <el-button size="small" type="primary" @click="handleCreate">
+                <el-icon class="mr-1"><Plus /></el-icon>
+                新建订单
+              </el-button>
               <el-button :loading="loading" @click="load">刷新</el-button>
             </div>
           </div>
@@ -633,6 +674,9 @@ const openTaskDetail = async (row: AdminTaskVo) => {
                   </el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty description="暂无订单数据" :image-size="80" />
+              </template>
             </el-table>
 
             <div class="mt-4 flex justify-center">
@@ -714,6 +758,9 @@ const openTaskDetail = async (row: AdminTaskVo) => {
                   <el-button size="small" @click="openTaskDetail(scope.row)">详情</el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty description="暂无任务数据" :image-size="80" />
+              </template>
             </el-table>
 
             <div class="mt-4 flex justify-center">
@@ -793,7 +840,7 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 
 <style scoped>
 .manage-tabs {
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -801,7 +848,7 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 
 /* 飞行中行高亮：浅绿底 + 首列色条（REQ-FRONTEND-001 §2.1） */
 :deep(.el-table .flying-row) {
-  background-color: #f0f9eb;
+  background-color: var(--success-soft);
 }
 
 :deep(.el-table .flying-row > td:first-child) {
@@ -809,6 +856,6 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 }
 
 :deep(.el-table .flying-row:hover > td) {
-  background-color: #e9f7e1;
+  background-color: var(--success-softer);
 }
 </style>

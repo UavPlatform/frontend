@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
-import { Avatar, Notebook, Tickets, User } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Avatar,
+  Notebook,
+  Position,
+  Promotion,
+  Refresh,
+  Tickets,
+  User,
+  WarningFilled,
+} from '@element-plus/icons-vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import { getAdminComplaints } from '../api/modules/admin-query'
 import { scanInProgressTasks, scanOrders } from '../api/modules/admin-scan'
@@ -15,7 +25,7 @@ import { summarizeTrajectory, type TelemetrySummary } from '../utils/telemetry'
 /**
  * 首页看板（REQ-FRONTEND-001 §1）：
  *  A. 四指标卡（点击带筛选跳订单/飞手列表）；
- *  B. 正在飞行订单卡片（路线/主体/遥测摘要 + [任务监管]/[详情]，轮询刷新遥测）；
+ *  B. 正在飞行订单表格（路线/主体/遥测摘要 + [任务监管]/[详情]，轮询刷新遥测）；
  *  C. 侧栏快捷入口 + 待办 + 今日新发 Top5。
  * 无机队启停直播控件（ADR-0004 移除项）。
  */
@@ -66,33 +76,50 @@ const flyingRiders = computed(() => {
   return names.size
 })
 
+const metricIcons: Record<string, Component> = {
+  flying: Promotion,
+  today: Tickets,
+  dispute: WarningFilled,
+  pilot: User,
+}
+
+// 趋势方向：接入历史统计接口后填充 up/down（当前无历史数据，默认 flat 中性）
+const metricTrends: Record<string, 'up' | 'down' | 'flat'> = {
+  flying: 'flat',
+  today: 'flat',
+  dispute: 'flat',
+  pilot: 'flat',
+}
+
+const TREND_ARROWS: Record<string, string> = { up: '↑', down: '↓', flat: '—' }
+
 const metrics = computed(() => [
   {
     key: 'flying',
     label: '正在飞行',
     value: flyingCards.value ? String(flyingCards.value.length) : '—',
-    hint: '执行中任务 · 点按筛选',
+    hint: '执行中任务',
     to: { name: 'orders', query: { status: 'in_progress' } } satisfies RouteLocationRaw,
   },
   {
     key: 'today',
     label: '今日订单',
     value: todayOrders.value ? String(todayOrders.value.length) : '—',
-    hint: '今日新建 · 点按筛选',
+    hint: '今日新建',
     to: { name: 'orders', query: { date: 'today' } } satisfies RouteLocationRaw,
   },
   {
     key: 'dispute',
     label: '待处理争议',
     value: pendingComplaintTotal.value !== undefined ? String(pendingComplaintTotal.value) : '—',
-    hint: '投诉待处理 · 点按筛选',
+    hint: '投诉待处理',
     to: { name: 'orders', query: { dispute: 'pending' } } satisfies RouteLocationRaw,
   },
   {
     key: 'pilot',
     label: '在线飞手',
     value: `${flyingRiders.value}/${registeredRiders.value ?? '—'}`,
-    hint: '在飞 / 在册飞手',
+    hint: '在飞 / 在册',
     to: { name: 'pilots' } satisfies RouteLocationRaw,
   },
 ])
@@ -146,16 +173,15 @@ const orderStatusLabel = (order: AdminOrderVo) => order.orderStatusDesc || order
 const telemetrySummary = (card: FlyingCard) => {
   const telemetry = card.telemetry
   if (!telemetry) {
-    return '遥测暂无数据（等待设备上报）'
+    return '等待设备上报'
   }
   const parts = [
     telemetry.altitude != null ? `高度 ${telemetry.altitude.toFixed(1)} m` : '',
     telemetry.speed != null ? `速度 ${telemetry.speed.toFixed(1)} m/s` : '',
     telemetry.battery != null ? `电量 ${telemetry.battery}%` : '',
     telemetry.startedAt ? `已飞 ${formatDuration(Date.now() - telemetry.startedAt)}` : '',
-    telemetry.reportedAt ? `上报 ${formatClock(new Date(telemetry.reportedAt))}` : '',
   ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : '遥测暂无数据（等待设备上报）'
+  return parts.length > 0 ? parts.join(' · ') : '等待设备上报'
 }
 
 /** 拉取全部飞行卡的轨迹并截取首尾点位 → 遥测摘要 */
@@ -227,7 +253,6 @@ const load = async () => {
       ? complaints.totalElements ?? pendingComplaints.value.length
       : undefined
     registeredRiders.value = riders?.length
-    // 待验收超期 = 待验收总数 - 仍新鲜（cutoff 之后创建）的部分；扫描被截断则无法确定，折叠该待办
     overdueWaiting.value = waitingScan
       ? waitingScan.truncated
         ? undefined
@@ -260,262 +285,628 @@ const openOrderDetail = (orderNum?: string) => {
   }
   go({ name: 'order-detail', params: { orderNum } })
 }
+
+const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
 </script>
 
 <template>
   <MainLayout title="首页" subtitle="值守第一屏：平台指标、正在飞行订单与快捷入口。">
-    <div class="flex flex-col gap-4">
-      <!-- A. 指标卡片区 -->
-      <section class="panel-card p-4 md:p-5">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <div class="text-sm font-700 text-[#303133]">平台指标</div>
-            <div class="mt-1 text-xs text-[#909399]">更新于 {{ updatedAt }}</div>
+    <div class="dash">
+      <!-- 工具栏 -->
+      <div class="dash__toolbar">
+        <span class="dash__updated">更新于 {{ updatedAt }}</span>
+        <el-button size="small" :loading="loading" @click="load">
+          <el-icon class="mr-1"><Refresh /></el-icon>
+          刷新
+        </el-button>
+      </div>
+
+      <!-- 指标卡 -->
+      <div class="stat-grid">
+        <button
+          v-for="metric in metrics"
+          :key="metric.key"
+          type="button"
+          class="kpi"
+          @click="go(metric.to)"
+        >
+          <div class="kpi__top">
+            <span class="kpi__icon" :class="`kpi__icon--${metric.key}`">
+              <el-icon><component :is="metricIcons[metric.key]" /></el-icon>
+            </span>
+            <span class="kpi__label">{{ metric.label }}</span>
           </div>
-          <el-button :loading="loading" @click="load">刷新</el-button>
-        </div>
+          <div class="kpi__value tabular-nums">{{ metric.value }}</div>
+          <div class="kpi__meta">
+            <span>{{ metric.hint }}</span>
+            <span class="kpi__trend" :class="`kpi__trend--${metricTrends[metric.key]}`">
+              {{ TREND_ARROWS[metricTrends[metric.key]] }} 较昨日
+            </span>
+          </div>
+        </button>
+      </div>
 
-        <div class="mt-4 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
-          <button
-            v-for="metric in metrics"
-            :key="metric.key"
-            type="button"
-            class="metric-card"
-            @click="go(metric.to)"
-          >
-            <div class="text-sm text-[#606266]">{{ metric.label }}</div>
-            <div class="mt-2 text-3xl font-800 text-[#303133]">{{ metric.value }}</div>
-            <div class="mt-1 text-xs text-[#909399]">{{ metric.hint }}</div>
-          </button>
-        </div>
-      </section>
-
-      <!-- B + C：飞行区（主） + 快捷/待办/今日新发（侧栏） -->
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section class="panel-card p-4 md:p-5">
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-sm font-700 text-[#303133]">正在飞行的订单</div>
-            <el-tag v-if="flyingCards?.length" type="success" effect="plain">
-              {{ flyingCards.length }} 单在飞
+      <!-- 主区 + 侧栏 -->
+      <div class="dash-grid">
+        <section class="panel-card panel">
+          <div class="panel__head">
+            <div class="panel__title">
+              <span class="live-dot"></span>
+              正在飞行的订单
+              <span v-if="flyingCards?.length" class="panel__count">{{ flyingCards.length }}</span>
+            </div>
+            <el-tag v-if="flyingCards?.length" type="success" effect="light" size="small">
+              飞行中
             </el-tag>
           </div>
 
-          <div v-if="flyingCards?.length" class="mt-4 flex flex-col gap-3">
-            <article
-              v-for="card in flyingCards"
-              :key="card.task.taskNum || card.task.orderNum"
-              class="flying-card"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-700 text-[#303133]">#{{ card.task.orderNum || '暂无订单号' }}</span>
-                <el-tag type="success" effect="dark" size="small">飞行中</el-tag>
-                <span class="text-sm text-[#606266]">{{ card.task.taskName || '—' }}</span>
-                <span class="ml-auto text-sm font-700 text-[#303133]">
-                  {{ card.task.totalAmount != null ? `¥${card.task.totalAmount.toFixed(2)}` : '—' }}
+          <el-table v-if="flyingCards?.length" :data="flyingCards" size="small">
+            <el-table-column label="订单" min-width="150">
+              <template #default="{ row }">
+                <div class="order-cell">
+                  <span class="live-dot live-dot--sm"></span>
+                  <span class="order-num tabular-nums">{{ row.task.orderNum || '暂无订单号' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="任务" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.task.taskName || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="用户" min-width="90">
+              <template #default="{ row }">
+                <button
+                  type="button"
+                  class="link"
+                  @click="go({ name: 'users', query: row.task.userId ? { id: String(row.task.userId) } : {} })"
+                >
+                  {{ row.task.ownerName || '—' }}
+                </button>
+              </template>
+            </el-table-column>
+            <el-table-column label="飞手" min-width="90">
+              <template #default="{ row }">
+                <button
+                  type="button"
+                  class="link"
+                  @click="go({ name: 'pilots', query: row.task.riderName ? { q: row.task.riderName } : {} })"
+                >
+                  {{ row.task.riderName || '—' }}
+                </button>
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="110" align="right">
+              <template #default="{ row }">
+                <span class="amount tabular-nums">{{ formatAmount(row.task.totalAmount) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="遥测" min-width="190">
+              <template #default="{ row }">
+                <span class="telemetry" :title="telemetrySummary(row)">
+                  {{ telemetrySummary(row) }}
                 </span>
-              </div>
-
-              <div class="route-line">
-                路线：{{ card.task.description || '暂无路线描述' }}
-              </div>
-
-              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#606266]">
-                <button
-                  type="button"
-                  class="subject-link"
-                  @click="go({ name: 'users', query: card.task.userId ? { id: String(card.task.userId) } : {} })"
-                >
-                  用户 {{ card.task.ownerName || '—' }}
-                </button>
-                <button
-                  type="button"
-                  class="subject-link"
-                  @click="go({ name: 'pilots', query: card.task.riderName ? { q: card.task.riderName } : {} })"
-                >
-                  飞手 {{ card.task.riderName || '—' }}
-                </button>
-                <span>距离 {{ card.task.totalDistance != null ? `${card.task.totalDistance.toFixed(1)} m` : '—' }}</span>
-              </div>
-
-              <div class="telemetry-line">{{ telemetrySummary(card) }}</div>
-
-              <div class="mt-1 flex flex-wrap gap-2">
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="132" fixed="right">
+              <template #default="{ row }">
                 <el-button
-                  v-if="card.task.orderNum"
-                  type="primary"
+                  v-if="row.task.orderNum"
                   size="small"
-                  @click="go({ name: 'order-supervise', params: { orderNum: card.task.orderNum } })"
+                  type="primary"
+                  link
+                  @click="go({ name: 'order-supervise', params: { orderNum: row.task.orderNum } })"
                 >
-                  任务监管
+                  监管
                 </el-button>
                 <el-button
-                  v-if="card.task.orderNum"
+                  v-if="row.task.orderNum"
                   size="small"
-                  @click="openOrderDetail(card.task.orderNum)"
+                  link
+                  @click="openOrderDetail(row.task.orderNum)"
                 >
                   详情
                 </el-button>
-                <span v-else class="self-center text-xs text-[#909399]">订单生成中，暂无可跳转目标</span>
-              </div>
-            </article>
-          </div>
+                <span v-else class="text-xs" style="color: var(--text-faint)">订单生成中</span>
+              </template>
+            </el-table-column>
+          </el-table>
 
-          <el-empty v-else-if="!loading" class="mt-4" description="当前无飞行作业">
-            <el-button type="primary" plain @click="go({ name: 'orders' })">
-              查看全部订单
-            </el-button>
-          </el-empty>
+          <div v-else-if="!loading" class="map-placeholder">
+            <div class="map-placeholder__grid"></div>
+            <div class="map-placeholder__center">
+              <span class="map-placeholder__icon"><el-icon><Position /></el-icon></span>
+              <span class="map-placeholder__title">地图轨迹区域</span>
+              <span class="map-placeholder__desc">接入高德 / 百度地图后，在此展示无人机实时轨迹</span>
+              <el-button type="primary" plain size="small" @click="go({ name: 'orders' })">
+                查看全部订单
+              </el-button>
+            </div>
+          </div>
         </section>
 
-        <aside class="flex flex-col gap-4">
-          <section class="panel-card p-4">
-            <div class="text-sm font-700 text-[#303133]">快捷入口</div>
-            <div class="mt-3 grid grid-cols-2 gap-2">
+        <aside class="rail">
+          <section class="panel-card panel">
+            <div class="panel__title">快捷操作</div>
+            <div class="quick-grid">
               <button
                 v-for="entry in quickEntries"
                 :key="entry.label"
                 type="button"
-                class="quick-entry"
+                class="quick-item"
                 @click="go(entry.to)"
               >
-                <el-icon class="text-lg">
-                  <component :is="entry.icon" />
-                </el-icon>
-                <span>{{ entry.label }}</span>
+                <span class="quick-item__icon">
+                  <el-icon><component :is="entry.icon" /></el-icon>
+                </span>
+                <span class="quick-item__label">{{ entry.label }}</span>
               </button>
             </div>
           </section>
 
-          <section v-if="todos.length > 0" class="panel-card p-4">
-            <div class="text-sm font-700 text-[#303133]">待办</div>
-            <div class="mt-3 flex flex-col gap-2">
+          <section v-if="todos.length > 0" class="panel-card panel">
+            <div class="panel__title">待办</div>
+            <div class="todo-list">
               <button
                 v-for="item in todos"
                 :key="item.key"
                 type="button"
-                class="todo-item"
+                class="todo"
                 @click="go(item.to)"
               >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="font-600 text-[#303133]">{{ item.title }}</span>
-                  <span class="text-xs text-[#909399]">处理 →</span>
-                </div>
-                <div v-if="item.detail" class="mt-1 truncate text-xs text-[#909399]">
-                  {{ item.detail }}
-                </div>
+                <span class="todo__dot" :class="`todo__dot--${item.key}`"></span>
+                <span class="todo__body">
+                  <span class="todo__title">{{ item.title }}</span>
+                  <span class="todo__detail">{{ item.detail }}</span>
+                </span>
+                <el-icon class="todo__arrow"><ArrowRight /></el-icon>
               </button>
             </div>
-          </section>
-
-          <section v-if="todayOrders?.length" class="panel-card p-4">
-            <div class="flex items-center justify-between gap-2">
-              <div class="text-sm font-700 text-[#303133]">今日新发</div>
-              <button type="button" class="subject-link" @click="go({ name: 'orders', query: { date: 'today' } })">
-                查看更多 →
-              </button>
-            </div>
-
-            <el-table
-              class="mt-3"
-              :data="todayTop5"
-              size="small"
-              @row-click="(row: AdminOrderVo) => openOrderDetail(row.orderNum)"
-            >
-              <el-table-column prop="orderNum" label="订单号" min-width="130" />
-              <el-table-column prop="ownerName" label="用户" min-width="80" />
-              <el-table-column label="状态" width="90">
-                <template #default="scope">
-                  {{ orderStatusLabel(scope.row) }}
-                </template>
-              </el-table-column>
-            </el-table>
           </section>
         </aside>
       </div>
+
+      <!-- 今日新发 -->
+      <section v-if="todayOrders?.length" class="panel-card panel">
+        <div class="panel__head">
+          <div class="panel__title">今日新发</div>
+          <button type="button" class="link" @click="go({ name: 'orders', query: { date: 'today' } })">
+            查看全部
+            <el-icon class="ml-1"><ArrowRight /></el-icon>
+          </button>
+        </div>
+        <el-table :data="todayTop5" size="small" @row-click="(row: AdminOrderVo) => openOrderDetail(row.orderNum)">
+          <el-table-column prop="orderNum" label="订单号" min-width="150" />
+          <el-table-column prop="ownerName" label="用户" min-width="90" />
+          <el-table-column label="状态" width="120">
+            <template #default="scope">
+              {{ orderStatusLabel(scope.row) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="金额" width="110" align="right">
+            <template #default="scope">
+              <span class="amount tabular-nums">{{ formatAmount(scope.row.totalAmount) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
     </div>
   </MainLayout>
 </template>
 
 <style scoped>
-.metric-card {
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dash__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  height: 28px;
+}
+
+.dash__updated {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 指标卡 ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.kpi {
   text-align: left;
-  border: 1px solid #ebeef5;
-  border-radius: 14px;
-  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
   padding: 14px 16px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.metric-card:hover {
-  border-color: #d9ecff;
-  background: #f5faff;
+.kpi:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-float);
 }
 
-.flying-card {
-  border: 1px solid #e1f3d8;
-  border-left: 3px solid #67c23a;
-  border-radius: 12px;
-  background: #f7fbf4;
+.kpi__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kpi__icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+.kpi__icon--flying { background: var(--kpi-flying-soft); color: var(--kpi-flying); }
+.kpi__icon--today { background: var(--kpi-today-soft); color: var(--kpi-today); }
+.kpi__icon--dispute { background: var(--kpi-dispute-soft); color: var(--kpi-dispute); }
+.kpi__icon--pilot { background: var(--kpi-pilot-soft); color: var(--kpi-pilot); }
+
+.kpi__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.kpi__value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-strong);
+}
+
+.kpi__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.kpi__trend {
+  color: var(--text-faint);
+}
+
+.kpi__trend--up { color: var(--success); font-weight: 600; }
+.kpi__trend--down { color: var(--danger); font-weight: 600; }
+.kpi__trend--flat { color: var(--text-faint); }
+
+/* ---------- 面板通用 ---------- */
+.panel {
   padding: 14px 16px;
 }
 
-.route-line {
-  margin-top: 6px;
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
-  color: #303133;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.panel__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ---------- 飞行状态点 ---------- */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4);
+  animation: pulse 2s infinite;
+}
+
+.live-dot--sm {
+  width: 6px;
+  height: 6px;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+  70% { box-shadow: 0 0 0 5px rgba(5, 150, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+}
+
+.order-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-num {
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.amount {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.telemetry {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.telemetry-line {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #606266;
-}
-
-.subject-link {
-  color: #409eff;
+.link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--brand);
+  font-size: inherit;
+  font-weight: 500;
   cursor: pointer;
-  font-weight: 600;
 }
 
-.subject-link:hover {
+.link:hover {
+  color: var(--brand-strong);
   text-decoration: underline;
 }
 
-.quick-entry {
+/* ---------- 地图占位 ---------- */
+.map-placeholder {
+  position: relative;
+  height: 320px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  overflow: hidden;
+  background: #0b1220;
+}
+
+.map-placeholder__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.map-placeholder__center {
+  position: relative;
+  height: 100%;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.map-placeholder__icon {
+  font-size: 30px;
+  color: #3b82f6;
+}
+
+.map-placeholder__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.map-placeholder__desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+/* ---------- 空状态 ---------- */
+.empty {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #ebeef5;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty__icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 10px;
-  background: #f5f7fa;
-  padding: 12px 8px;
+  background: var(--bg-sunken);
+  color: var(--text-faint);
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.empty__title {
   font-size: 14px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.empty__desc {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+/* ---------- 主次两栏 ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- 快捷操作 ---------- */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--bg-sunken);
+  padding: 10px 8px;
   cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.quick-entry:hover {
-  border-color: #d9ecff;
-  background: #ecf5ff;
+.quick-item:hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 
-.todo-item {
+.quick-item:hover .quick-item__icon {
+  color: var(--brand-strong);
+}
+
+.quick-item__icon {
+  font-size: 18px;
+  color: var(--brand);
+}
+
+.quick-item__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-regular);
+}
+
+/* ---------- 待办 ---------- */
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
-  border: 1px solid #fde2e2;
-  border-radius: 10px;
-  background: #fef0f0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--bg-sunken);
   padding: 10px 12px;
   cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
-.todo-item:hover {
-  border-color: #fbc4c4;
+.todo:hover {
+  border-color: var(--border-strong);
+}
+
+.todo__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.todo__dot--dispute { background: var(--warning); }
+.todo__dot--overdue { background: var(--danger); }
+
+.todo__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.todo__detail {
+  font-size: 12px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo__arrow {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1200px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

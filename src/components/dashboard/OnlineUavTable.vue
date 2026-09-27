@@ -88,15 +88,15 @@ const getStartLiveLabel = (uav: UavItem) => {
     <el-table :data="uavs" :loading="loading" border stripe>
       <el-table-column label="设备 ID" min-width="160">
         <template #default="{ row }">
-          <div class="font-600 text-[#303133]">{{ row.deviceId ?? '--' }}</div>
-          <div class="text-xs text-[#909399]">#{{ row.id }}</div>
+          <div class="font-600 text-[var(--text-strong)]">{{ row.deviceId ?? '--' }}</div>
+          <div class="text-xs text-[var(--text-secondary)]">#{{ row.id }}</div>
         </template>
       </el-table-column>
 
       <el-table-column label="无人机名称" min-width="220">
         <template #default="{ row }">
-          <div class="font-600 text-[#303133]">{{ row.uavName }}</div>
-          <div class="text-xs text-[#909399]">{{ row.controllerModel || '控制器型号待上报' }}</div>
+          <div class="font-600 text-[var(--text-strong)]">{{ row.uavName }}</div>
+          <div class="text-xs text-[var(--text-secondary)]">{{ row.controllerModel || '控制器型号待上报' }}</div>
         </template>
       </el-table-column>
 
@@ -118,7 +118,7 @@ const getStartLiveLabel = (uav: UavItem) => {
 
       <el-table-column label="运行摘要" min-width="220">
         <template #default="{ row }">
-          <div class="text-sm text-[#303133]">{{ getRuntimeSummary(row) }}</div>
+          <div class="text-sm text-[var(--text-strong)]">{{ getRuntimeSummary(row) }}</div>
         </template>
       </el-table-column>
 

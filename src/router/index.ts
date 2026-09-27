@@ -12,6 +12,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    // 数据大屏展示：登录后默认落地页，4 屏自动轮播
+    path: '/showcase',
+    name: 'showcase',
+    component: () => import('../views/ShowcaseView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/orders',
     name: 'orders',
     component: () => import('../views/OrderView.vue'),
@@ -98,7 +105,7 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'admin-login' && authed && isAdmin) {
-    return { name: 'home' }
+    return { name: 'showcase' }
   }
 
   return true

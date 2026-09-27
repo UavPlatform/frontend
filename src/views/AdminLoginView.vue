@@ -34,7 +34,7 @@ const handleLogin = async () => {
 
     if (result.success) {
       ElMessage.success('管理员登录成功')
-      router.push({ name: 'home' })
+      router.push({ name: 'showcase' })
     } else {
       ElMessage.error(result.message || '登录失败')
     }
