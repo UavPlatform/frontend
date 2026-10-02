@@ -6,7 +6,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [vue()],
   test: {
-    maxWorkers: 4,
+    maxWorkers: process.env.CI ? 2 : 4,
+    // Real Element Plus mounts can be slower on shared CI runners; keep a bounded timeout.
+    testTimeout: 10_000,
     environment: 'happy-dom',
     include: ['tests/unit/**/*.spec.ts', 'tests/component/**/*.spec.ts'],
     coverage: {

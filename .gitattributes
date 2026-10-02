@@ -1,0 +1,3 @@
+# The OpenAPI checksum covers exact bytes; checkouts must preserve LF on every OS.
+openapi/drone-backend.openapi.json text eol=lf
+openapi/drone-backend.openapi.sha256 text eol=lf
