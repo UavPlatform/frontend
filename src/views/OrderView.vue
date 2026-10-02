@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import {
   ORDER_STATUS_META,
@@ -19,6 +20,7 @@ import {
 } from '../api/modules/admin-scan'
 import type { AdminOrderVo, AdminTaskVo } from '../types/admin'
 import { formatClock, formatDateTime } from '../utils/date'
+import { toCsv } from '../utils/csv'
 
 /* ------------------------------------------------------------------
  * 订单列表（REQ-FRONTEND-001 §2.1）
@@ -88,7 +90,7 @@ const parseQuery = (query: Record<string, unknown>) => {
     date: rawDate === 'today' || rawDate === '7d' ? rawDate : '',
     dispute: rawDispute === 'pending' ? 'pending' : '',
     q: String(query.q ?? ''),
-    page: Math.max(1, Number(query.page) || 1),
+    page: (Number.isSafeInteger(Number(query.page)) && Number(query.page) > 0 ? Number(query.page) : 1),
     size: PAGE_SIZES.includes(size) ? size : 10,
   }
 }
@@ -193,17 +195,12 @@ const load = async () => {
   try {
     const cutoff = dateCutoff()
     const keyword = filters.q.trim().toLowerCase()
-    const disputeOrders =
-      filters.dispute === 'pending'
-        ? new Set(
-            (await fetchPendingComplaints())
-              .rows.map((complaint) => complaint.orderNum)
-              .filter((orderNum): orderNum is string => Boolean(orderNum)),
-          )
-        : undefined
+    const complaints = filters.dispute === 'pending' ? await fetchPendingComplaints() : undefined
+    const disputeOrders = complaints ? new Set(complaints.rows.map((item) => item.orderNum)) : undefined
 
     if (filters.status === 'in_progress') {
-      const tasks = (await scanInProgressTasks()).filter(
+      const taskScan = await scanInProgressTasks()
+      const tasks = taskScan.rows.filter(
         (task) => task.taskStatus === 'IN_PROGRESS',
       )
       let list = tasks.map(fromTaskVo)
@@ -220,7 +217,7 @@ const load = async () => {
       list.sort(compareRows)
       rows.value = list
       total.value = list.length
-      truncated.value = false
+      truncated.value = taskScan.truncated || Boolean(complaints?.truncated)
     } else if (clientMode.value) {
       const [riderByTask, flying, scan] = await Promise.all([
         buildTaskIndex(),
@@ -228,12 +225,12 @@ const load = async () => {
         scanOrders({ status: filters.status || undefined, cutoff }),
       ])
       const flyingOrders = new Set(
-        flying
+        flying.rows
           .filter((task) => task.taskStatus === 'IN_PROGRESS')
           .map((task) => task.orderNum)
           .filter((orderNum): orderNum is string => Boolean(orderNum)),
       )
-      let list = scan.rows.map((vo) => fromOrderVo(vo, riderByTask, flyingOrders))
+      let list = scan.rows.map((vo) => fromOrderVo(vo, riderByTask.index, flyingOrders))
       if (disputeOrders) {
         list = list.filter((row) => row.orderNum && disputeOrders.has(row.orderNum))
       }
@@ -244,7 +241,7 @@ const load = async () => {
       list.sort(compareRows)
       rows.value = list
       total.value = list.length
-      truncated.value = scan.truncated
+      truncated.value = scan.truncated || riderByTask.truncated || flying.truncated || Boolean(complaints?.truncated)
     } else {
       const [riderByTask, flying, page] = await Promise.all([
         buildTaskIndex(),
@@ -259,34 +256,19 @@ const load = async () => {
       ])
       if (seq !== loadSeq) return
       const flyingOrders = new Set(
-        flying
+        flying.rows
           .filter((task) => task.taskStatus === 'IN_PROGRESS')
           .map((task) => task.orderNum)
           .filter((orderNum): orderNum is string => Boolean(orderNum)),
       )
-      const pageRows = (page.content ?? []).map((vo) => fromOrderVo(vo, riderByTask, flyingOrders))
+      const pageRows = (page.content ?? []).map((vo) => fromOrderVo(vo, riderByTask.index, flyingOrders))
       total.value = page.totalElements ?? pageRows.length
-      truncated.value = false
-
-      let list = pageRows
-      if (pageNo.value === 1) {
-        // 飞行中置顶：把不在本页的执行中订单补到页首（按 orderNum 去重）
-        const onPage = new Set(
-          pageRows
-            .map((row) => row.orderNum)
-            .filter((orderNum): orderNum is string => Boolean(orderNum)),
-        )
-        const pinned = flying
-          .filter(
-            (task) =>
-              task.taskStatus === 'IN_PROGRESS' && task.orderNum && !onPage.has(task.orderNum),
-          )
-          .map(fromTaskVo)
-        list = [...pinned, ...pageRows]
-      }
+      truncated.value = riderByTask.truncated || flying.truncated
+      const list = pageRows
       list.sort(compareRows)
       rows.value = list
     }
+    updatedAt.value = formatClock()
   } catch (err) {
     if (seq === loadSeq) {
       ElMessage.error(err instanceof Error ? err.message : '加载订单失败')
@@ -294,7 +276,6 @@ const load = async () => {
   } finally {
     if (seq === loadSeq) {
       loading.value = false
-      updatedAt.value = formatClock()
     }
   }
 }
@@ -354,6 +335,7 @@ const orderDetailVisible = ref(false)
 const orderDetailLoading = ref(false)
 const orderDetail = ref<AdminOrderVo>()
 
+let orderDetailSeq = 0
 const openOrderDetail = async (row: OrderRow) => {
   // 契约里 orderNum 可空（历史数据/异常行），没有订单号就不发请求
   if (!row.orderNum) {
@@ -361,16 +343,20 @@ const openOrderDetail = async (row: OrderRow) => {
     return
   }
 
+  const seq = ++orderDetailSeq
   orderDetailVisible.value = true
   orderDetailLoading.value = true
   orderDetail.value = undefined
   try {
-    orderDetail.value = await getAdminOrderDetail(row.orderNum)
+    const detail = await getAdminOrderDetail(row.orderNum)
+    if (seq !== orderDetailSeq) return
+    orderDetail.value = detail
   } catch (err) {
+    if (seq !== orderDetailSeq) return
     ElMessage.error(err instanceof Error ? err.message : '查询订单详情失败')
     orderDetailVisible.value = false
   } finally {
-    orderDetailLoading.value = false
+    if (seq === orderDetailSeq) orderDetailLoading.value = false
   }
 }
 
@@ -399,6 +385,32 @@ const openSupervise = (row: OrderRow) => {
 const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
 
 const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
+
+/** 导出当前列表为 CSV（转义/公式注入防护见 utils/csv） */
+const handleExport = () => {
+  const header = ['订单号', '任务名称', '下单用户', '飞手', '金额', '距离', '状态', '更新时间']
+  const rows = pagedRows.value.map((row) => [
+    row.orderNum ?? '',
+    row.taskName ?? '',
+    row.ownerName ?? '',
+    row.riderName ?? '',
+    row.totalAmount ?? '',
+    row.totalDistance ?? '',
+    orderStatusLabel(row),
+    row.updateTime ?? '',
+  ])
+  const csv = toCsv(header, rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `订单导出_${updatedAt.value.replace(/:/g, '')}.csv`
+  link.click()
+  // revokeObjectURL 延迟调用，避免下载被中断
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  ElMessage.success(`已导出 ${rows.length} 条订单`)
+}
+
 
 const orderStatusTagType = (vo: AdminOrderVo | OrderRow) =>
   ORDER_STATUS_META[vo.orderStatusCode ?? -1]?.tagType ?? 'info'
@@ -434,7 +446,9 @@ const taskStatusOptions = Object.entries(TASK_STATUS_META).map(([status, meta]) 
   label: meta.label,
 }))
 
+let tasksSeq = 0
 const loadTasks = async () => {
+  const seq = ++tasksSeq
   tasksLoading.value = true
   try {
     const data = await getAdminTasks({
@@ -443,12 +457,13 @@ const loadTasks = async () => {
       status: taskQuery.status || undefined,
       taskNum: taskQuery.taskNum.trim() || undefined,
     })
+    if (seq !== tasksSeq) return
     tasks.value = data.content
     taskTotal.value = data.totalElements ?? 0
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '加载任务失败')
+    if (seq === tasksSeq) ElMessage.error(err instanceof Error ? err.message : '加载任务失败')
   } finally {
-    tasksLoading.value = false
+    if (seq === tasksSeq) tasksLoading.value = false
   }
 }
 
@@ -486,6 +501,7 @@ const taskDetailVisible = ref(false)
 const taskDetailLoading = ref(false)
 const taskDetail = ref<AdminTaskVo>()
 
+let taskDetailSeq = 0
 const openTaskDetail = async (row: AdminTaskVo) => {
   // 契约里 taskNum 可空，没有任务号就不发请求
   if (!row.taskNum) {
@@ -493,16 +509,20 @@ const openTaskDetail = async (row: AdminTaskVo) => {
     return
   }
 
+  const seq = ++taskDetailSeq
   taskDetailVisible.value = true
   taskDetailLoading.value = true
   taskDetail.value = undefined
   try {
-    taskDetail.value = await getAdminTaskDetail(row.taskNum)
+    const detail = await getAdminTaskDetail(row.taskNum)
+    if (seq !== taskDetailSeq) return
+    taskDetail.value = detail
   } catch (err) {
+    if (seq !== taskDetailSeq) return
     ElMessage.error(err instanceof Error ? err.message : '查询任务详情失败')
     taskDetailVisible.value = false
   } finally {
-    taskDetailLoading.value = false
+    if (seq === taskDetailSeq) taskDetailLoading.value = false
   }
 }
 </script>
@@ -568,7 +588,12 @@ const openTaskDetail = async (row: AdminTaskVo) => {
               <el-button @click="resetFilters">重置</el-button>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-xs text-[#909399]">更新于 {{ updatedAt }}</span>
+              <span class="text-xs text-[var(--text-secondary)]">更新于 {{ updatedAt }}</span>
+              <el-button size="small" @click="handleExport">
+                <el-icon class="mr-1"><Download /></el-icon>
+                导出当前页
+              </el-button>
+
               <el-button :loading="loading" @click="load">刷新</el-button>
             </div>
           </div>
@@ -578,7 +603,7 @@ const openTaskDetail = async (row: AdminTaskVo) => {
             class="mt-3"
             type="warning"
             :closable="false"
-            title="候选数据已截断（扫描上限 1000 条），请收紧状态/时间/关键字筛选后再试"
+            title="部分订单、任务或投诉数据未加载完整，筛选结果和飞手信息可能不完整。可按状态或时间缩小范围。"
           />
 
           <div class="mt-4">
@@ -633,6 +658,9 @@ const openTaskDetail = async (row: AdminTaskVo) => {
                   </el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty description="暂无订单数据" :image-size="80" />
+              </template>
             </el-table>
 
             <div class="mt-4 flex justify-center">
@@ -714,6 +742,9 @@ const openTaskDetail = async (row: AdminTaskVo) => {
                   <el-button size="small" @click="openTaskDetail(scope.row)">详情</el-button>
                 </template>
               </el-table-column>
+              <template #empty>
+                <el-empty description="暂无任务数据" :image-size="80" />
+              </template>
             </el-table>
 
             <div class="mt-4 flex justify-center">
@@ -793,7 +824,7 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 
 <style scoped>
 .manage-tabs {
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
@@ -801,7 +832,7 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 
 /* 飞行中行高亮：浅绿底 + 首列色条（REQ-FRONTEND-001 §2.1） */
 :deep(.el-table .flying-row) {
-  background-color: #f0f9eb;
+  background-color: var(--success-soft);
 }
 
 :deep(.el-table .flying-row > td:first-child) {
@@ -809,6 +840,6 @@ const openTaskDetail = async (row: AdminTaskVo) => {
 }
 
 :deep(.el-table .flying-row:hover > td) {
-  background-color: #e9f7e1;
+  background-color: var(--success-softer);
 }
 </style>

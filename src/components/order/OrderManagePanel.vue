@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { approveAdminComplaint, rejectAdminComplaint } from '../../api/modules/admin-query'
 import {
   buildMatchTimeline,
@@ -66,7 +66,9 @@ const applications = ref<TaskApplicationVo[] | null>()
 const evidence = ref<TaskEvidenceVo[] | null>()
 const complaints = ref<AdminComplaint[] | null>()
 
+let sideSeq = 0
 const loadSideData = async () => {
+  const seq = ++sideSeq
   applications.value = undefined
   evidence.value = undefined
   complaints.value = undefined
@@ -78,6 +80,7 @@ const loadSideData = async () => {
     taskNum ? fetchTaskEvidence(taskNum) : Promise.resolve(null),
     orderNum ? fetchOrderComplaints(orderNum) : Promise.resolve(null),
   ])
+  if (seq !== sideSeq) return
   applications.value = applicationRows
   evidence.value = evidenceRows
   complaints.value = complaintRows
@@ -179,12 +182,22 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 
   actingId.value = id
   try {
+    const orderNum = props.order.orderNum
+    try {
+      await ElMessageBox.confirm(
+        action === 'approve'
+          ? `确认批准订单 ${orderNum} 的投诉 #${id} 并发起退款？退款金额以服务端核算为准。`
+          : `确认驳回订单 ${orderNum} 的投诉 #${id}？该操作将提交驳回理由。`,
+        '确认投诉处置', { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' },
+      )
+    } catch { return }
+    if (props.order.orderNum !== orderNum) return
     if (action === 'approve') {
       await approveAdminComplaint(id, note || undefined)
       ElMessage.success('已批准投诉，退款已发起')
     } else {
       await rejectAdminComplaint(id, note)
-      ElMessage.success('已驳回投诉，订单恢复为已完成')
+      ElMessage.success('已驳回投诉，订单状态以刷新结果为准')
     }
     delete noteDrafts.value[id]
     await loadSideData()
@@ -286,7 +299,7 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
             <el-link v-if="scope.row.downloadUrl" :href="scope.row.downloadUrl" target="_blank" type="primary">
               查看
             </el-link>
-            <span v-else class="text-xs text-[#909399]">—</span>
+            <span v-else class="text-xs text-[var(--text-secondary)]">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -307,10 +320,10 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
           <div class="flex flex-wrap items-center gap-2">
             <el-tag size="small" :type="row.statusType" effect="plain">{{ row.status }}</el-tag>
             <span class="step-label">{{ row.reason }}</span>
-            <span class="text-xs text-[#909399]">{{ row.time }}</span>
+            <span class="text-xs text-[var(--text-secondary)]">{{ row.time }}</span>
           </div>
           <p class="complaint-desc">{{ row.description }}</p>
-          <div class="text-xs text-[#606266]">处理备注：{{ row.adminNote }} · 退款金额：{{ row.refund }}</div>
+          <div class="text-xs text-[var(--text-regular)]">处理备注：{{ row.adminNote }} · 退款金额：{{ row.refund }}</div>
 
           <div v-if="row.pending" class="complaint-actions">
             <el-input
@@ -372,40 +385,40 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 .section-title {
   font-size: 1.02rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .section-hint {
   margin-top: 0.3rem;
   font-size: 0.85rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .step-label {
   font-weight: 700;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .step-note {
   margin-top: 0.25rem;
   font-size: 0.82rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .block-note {
   margin-top: 0.85rem;
   padding: 0.9rem 1rem;
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #fafafa;
-  color: #909399;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .amount {
   font-size: 1.05rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .complaint-card {
@@ -419,7 +432,7 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 .complaint-desc {
   margin-top: 0.4rem;
   font-size: 0.9rem;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .complaint-actions {

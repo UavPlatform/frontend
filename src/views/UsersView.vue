@@ -35,7 +35,7 @@ const parseQuery = (query: Record<string, unknown>) => {
   return {
     q: String(query.q ?? ''),
     status: rawStatus === '1' || rawStatus === '0' ? rawStatus : '',
-    page: Math.max(1, Number(query.page) || 1),
+    page: (Number.isSafeInteger(Number(query.page)) && Number(query.page) > 0 ? Number(query.page) : 1),
     size: PAGE_SIZES.includes(size) ? size : 10,
     id: /^\d+$/.test(rawId) ? rawId : '',
   }
@@ -254,6 +254,9 @@ const statusTagType = (row: UserRow) => (row.status === 0 ? 'danger' : 'success'
               <el-button size="small" @click.stop="openDetail(scope.row)">详情</el-button>
             </template>
           </el-table-column>
+          <template #empty>
+            <el-empty description="暂无用户数据" :image-size="80" />
+          </template>
         </el-table>
 
         <div class="mt-4 flex justify-center">
@@ -276,7 +279,7 @@ const statusTagType = (row: UserRow) => (row.status === 0 ? 'danger' : 'success'
 <style scoped>
 /* 定位行高亮：浅蓝底 + 首列色条（承接 003 的 ?id= 定位参数） */
 :deep(.el-table .locate-row) {
-  background-color: #ecf5ff;
+  background-color: var(--brand-soft);
 }
 
 :deep(.el-table .locate-row > td:first-child) {
@@ -284,6 +287,6 @@ const statusTagType = (row: UserRow) => (row.status === 0 ? 'danger' : 'success'
 }
 
 :deep(.el-table .locate-row:hover > td) {
-  background-color: #e3f0ff;
+  background-color: var(--brand-soft);
 }
 </style>

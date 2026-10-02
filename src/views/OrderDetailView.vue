@@ -74,13 +74,13 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
       <template v-if="order">
         <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xl font-700 text-[#303133]">#{{ order.orderNum }}</span>
+            <span class="text-xl font-700 text-[var(--text-strong)]">#{{ order.orderNum }}</span>
             <el-tag :type="statusTagType" effect="plain">{{ statusLabel }}</el-tag>
             <el-tag v-if="isFlying" type="success" effect="dark">飞行中</el-tag>
-            <span class="text-lg font-700 text-[#303133]">
+            <span class="text-lg font-700 text-[var(--text-strong)]">
               {{ formatAmount(order.totalAmount) }}
             </span>
-            <span class="text-sm text-[#606266]">{{ formatDistance(order.totalDistance) }}</span>
+            <span class="text-sm text-[var(--text-regular)]">{{ formatDistance(order.totalDistance) }}</span>
           </div>
 
           <div class="flex items-center gap-2">
@@ -93,7 +93,7 @@ const formatDistance = (value?: number) => `${Number(value ?? 0).toFixed(1)} m`
           <el-descriptions-item label="订单号">{{ order.orderNum }}</el-descriptions-item>
           <el-descriptions-item label="下单用户">
             {{ order.ownerName || '—' }}
-            <span v-if="order.userId" class="ml-1 text-xs text-[#909399]">ID {{ order.userId }}</span>
+            <span v-if="order.userId" class="ml-1 text-xs text-[var(--text-secondary)]">ID {{ order.userId }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="关联任务">
             {{ order.taskName || '—' }}（{{ order.taskNum || '—' }}）

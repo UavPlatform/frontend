@@ -38,7 +38,7 @@ const openOrder = (vo: AdminOrderVo) => {
   <section class="panel-card p-5" v-loading="props.loading">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <div class="section-title">关联订单</div>
-      <div class="text-xs text-[#909399]">
+      <div class="text-xs text-[var(--text-secondary)]">
         <span v-if="props.hint" class="mr-3">{{ props.hint }}</span>
         共 {{ props.orders.length }} 条
       </div>
@@ -90,6 +90,6 @@ const openOrder = (vo: AdminOrderVo) => {
 .section-title {
   font-size: 1.02rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 </style>

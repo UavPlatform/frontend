@@ -11,7 +11,12 @@
     "api:sync": "node scripts/openapi-sync.mjs",
     "api:gen": "openapi-typescript openapi/drone-backend.openapi.json -o src/api/generated/openapi.d.ts",
     "api:check": "node scripts/openapi-check.mjs",
-    "api": "pnpm run api:sync && pnpm run api:gen && pnpm run api:check"
+    "api": "pnpm run api:sync && pnpm run api:gen && pnpm run api:check",
+    "typecheck": "vue-tsc -b",
+    "lint": "eslint src tests scripts *.config.*",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "pnpm run build && playwright test",
+    "check": "pnpm run api:check && pnpm run lint && pnpm run test:coverage && pnpm run build"
   },
   "dependencies": {
     "@amap/amap-jsapi-loader": "^1.0.1",
@@ -23,14 +28,21 @@
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.5",
+    "@vitest/coverage-v8": "^5.0.2",
     "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.9.0",
+    "eslint": "^10.11.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.13.0",
     "happy-dom": "^20.14.3",
     "openapi-typescript": "^7.13.0",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.0",
     "unocss": "^66.6.7",
+    "unplugin-vue-components": "^32.1.0",
     "vite": "^8.0.0",
     "vitest": "^5.0.0",
     "vue-tsc": "^3.2.5"

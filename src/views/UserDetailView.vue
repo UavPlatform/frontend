@@ -63,10 +63,10 @@ const backToList = () => {
       <section class="panel-card p-5" v-loading="loading">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xl font-700 text-[#303133]">
+            <span class="text-xl font-700 text-[var(--text-strong)]">
               {{ detail?.userName || '用户' }}
             </span>
-            <span v-if="detail" class="text-sm text-[#909399]">ID {{ detail.userId }}</span>
+            <span v-if="detail" class="text-sm text-[var(--text-secondary)]">ID {{ detail.userId }}</span>
             <el-tag
               v-if="detail"
               :type="detail.status === 0 ? 'danger' : 'success'"

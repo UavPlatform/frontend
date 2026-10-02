@@ -3,14 +3,18 @@ import type { AuthSession } from '../types/auth'
 const SESSION_KEY = 'uav-console-session'
 
 export const getStoredSession = (): AuthSession | null => {
-  const raw = window.localStorage.getItem(SESSION_KEY)
-
-  if (!raw) {
-    return null
-  }
-
   try {
-    return JSON.parse(raw) as AuthSession
+    const raw = window.localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    if (!session || typeof session.token !== 'string' || !session.token.trim() ||
+      !session.user || !['username', 'displayName', 'role', 'teamName'].every(
+        (key) => typeof session.user[key] === 'string') ||
+      (session.refreshToken != null && typeof session.refreshToken !== 'string')) {
+      window.localStorage.removeItem(SESSION_KEY)
+      return null
+    }
+    return session as AuthSession
   } catch {
     window.localStorage.removeItem(SESSION_KEY)
     return null
@@ -23,6 +27,7 @@ export const setStoredSession = (session: AuthSession) => {
 
 export const clearStoredSession = () => {
   window.localStorage.removeItem(SESSION_KEY)
+  window.localStorage.removeItem('uav-console-tabs')
 }
 
 export const hasSessionToken = () => Boolean(getStoredSession()?.token)

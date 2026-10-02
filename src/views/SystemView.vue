@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh, Search } from '@element-plus/icons-vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import { getApplicationLogs, getErrorLogs, getLogFiles, readLogFile } from '../api/modules/admin'
 import type { AdminLogFile } from '../types/admin'
+import { filterEntries, toEntries, type LogLevel } from '../utils/log'
 
 /**
  * 系统日志（REQ-FRONTEND-001 §5，次级入口 /system）：
@@ -17,6 +19,10 @@ const activeTab = ref<LogTab>('application')
 const logLines = ref(100)
 const LINE_OPTIONS = [50, 100, 200, 500]
 
+// 日志筛选：级别 + 关键字
+const levelFilter = ref<'ALL' | LogLevel>('ALL')
+const keyword = ref('')
+
 const appLogs = ref<string[]>([])
 const errorLogs = ref<string[]>([])
 const logsLoading = ref(false)
@@ -28,6 +34,10 @@ const filesLoading = ref(false)
 const openedFile = ref('')
 const fileContent = ref<string[]>([])
 const fileLoading = ref(false)
+
+const appEntries = computed(() => filterEntries(toEntries(appLogs.value), levelFilter.value, keyword.value))
+const errorEntries = computed(() => filterEntries(toEntries(errorLogs.value), levelFilter.value, keyword.value))
+const fileEntries = computed(() => filterEntries(toEntries(fileContent.value), levelFilter.value, keyword.value))
 
 const formatSize = (size?: number) => {
   if (size == null) return '—'
@@ -111,13 +121,34 @@ onMounted(async () => {
       </el-tabs>
 
       <div class="flex flex-wrap items-center gap-3">
-        <span class="text-sm text-[#606266]">显示行数</span>
+        <span class="text-sm text-[var(--text-regular)]">显示行数</span>
         <el-select v-model="logLines" class="!w-[110px]" size="small">
           <el-option v-for="line in LINE_OPTIONS" :key="line" :label="`${line} 行`" :value="line" />
         </el-select>
+
+        <span class="text-sm text-[var(--text-regular)]">级别</span>
+        <el-select v-model="levelFilter" class="!w-[110px]" size="small">
+          <el-option label="全部" value="ALL" />
+          <el-option label="ERROR" value="ERROR" />
+          <el-option label="WARN" value="WARN" />
+          <el-option label="INFO" value="INFO" />
+          <el-option label="DEBUG" value="DEBUG" />
+        </el-select>
+
+        <el-input
+          v-model="keyword"
+          class="!w-[200px]"
+          size="small"
+          placeholder="关键字搜索"
+          clearable
+          :prefix-icon="Search"
+        />
+
         <el-button type="primary" size="small" :loading="logsLoading" @click="handleRefresh">
+          <el-icon class="mr-1"><Refresh /></el-icon>
           刷新
         </el-button>
+
         <template v-if="activeTab === 'files'">
           <el-button
             size="small"
@@ -126,18 +157,40 @@ onMounted(async () => {
           >
             上级目录
           </el-button>
-          <span class="text-xs text-[#909399]">当前目录：/{{ currentPath }}</span>
+          <span class="text-xs text-[var(--text-secondary)]">当前目录：/{{ currentPath }}</span>
         </template>
       </div>
 
       <!-- 应用日志 -->
       <div v-show="activeTab === 'application'" class="log-container mt-4" v-loading="logsLoading">
-        <pre class="log-content">{{ appLogs.length > 0 ? appLogs.join('\n') : '暂无日志' }}</pre>
+        <div v-if="appEntries.length" class="log-lines">
+          <div
+            v-for="(entry, i) in appEntries"
+            :key="i"
+            class="log-line"
+            :class="`log-line--${entry.level.toLowerCase()}`"
+          >
+            <span class="log-line__level">{{ entry.level === 'OTHER' ? '—' : entry.level }}</span>
+            <span class="log-line__text">{{ entry.line }}</span>
+          </div>
+        </div>
+        <div v-else class="log-empty">{{ appLogs.length ? '无匹配日志' : '暂无日志' }}</div>
       </div>
 
       <!-- 错误日志 -->
-      <div v-show="activeTab === 'error'" class="log-container error mt-4" v-loading="logsLoading">
-        <pre class="log-content">{{ errorLogs.length > 0 ? errorLogs.join('\n') : '暂无错误日志' }}</pre>
+      <div v-show="activeTab === 'error'" class="log-container mt-4" v-loading="logsLoading">
+        <div v-if="errorEntries.length" class="log-lines">
+          <div
+            v-for="(entry, i) in errorEntries"
+            :key="i"
+            class="log-line"
+            :class="`log-line--${entry.level.toLowerCase()}`"
+          >
+            <span class="log-line__level">{{ entry.level === 'OTHER' ? '—' : entry.level }}</span>
+            <span class="log-line__text">{{ entry.line }}</span>
+          </div>
+        </div>
+        <div v-else class="log-empty">{{ errorLogs.length ? '无匹配日志' : '暂无错误日志' }}</div>
       </div>
 
       <!-- 日志文件：目录下钻 + 文件查看 -->
@@ -188,11 +241,22 @@ onMounted(async () => {
 
         <div v-if="openedFile" class="mt-4">
           <div class="mb-2 flex items-center gap-2">
-            <span class="text-sm font-600 text-[#303133]">{{ openedFile }}</span>
+            <span class="text-sm font-600 text-[var(--text-strong)]">{{ openedFile }}</span>
             <el-tag size="small" type="info" effect="plain">{{ fileContent.length }} 行</el-tag>
           </div>
           <div class="log-container" v-loading="fileLoading">
-            <pre class="log-content">{{ fileContent.length > 0 ? fileContent.join('\n') : '暂无内容' }}</pre>
+            <div v-if="fileEntries.length" class="log-lines">
+              <div
+                v-for="(entry, i) in fileEntries"
+                :key="i"
+                class="log-line"
+                :class="`log-line--${entry.level.toLowerCase()}`"
+              >
+                <span class="log-line__level">{{ entry.level === 'OTHER' ? '—' : entry.level }}</span>
+                <span class="log-line__text">{{ entry.line }}</span>
+              </div>
+            </div>
+            <div v-else class="log-empty">{{ fileContent.length ? '无匹配日志' : '暂无内容' }}</div>
           </div>
         </div>
       </div>
@@ -202,24 +266,58 @@ onMounted(async () => {
 
 <style scoped>
 .log-container {
-  background: #1e1e1e;
+  background: #111827;
+  border: 1px solid #1f2937;
   border-radius: 8px;
-  padding: 16px;
+  padding: 12px 16px;
   max-height: 600px;
   overflow: auto;
 }
 
-.log-container.error {
-  background: #2d1f1f;
+.log-lines {
+  display: flex;
+  flex-direction: column;
 }
 
-.log-content {
-  margin: 0;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #d4d4d4;
+.log-line {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 1px 0;
+  font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.log-line__level {
+  flex-shrink: 0;
+  width: 46px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 11px;
+  user-select: none;
+}
+
+.log-line--error .log-line__level { color: #f87171; }
+.log-line--warn .log-line__level { color: #fbbf24; }
+.log-line--info .log-line__level { color: #34d399; }
+.log-line--debug .log-line__level { color: #60a5fa; }
+.log-line--other .log-line__level { color: #64748b; }
+
+.log-line__text {
+  flex: 1;
+  color: #d1d5db;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.log-line--error .log-line__text { color: #fca5a5; }
+.log-line--warn .log-line__text { color: #fcd34d; }
+
+.log-empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
 }
 </style>

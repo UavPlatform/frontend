@@ -135,11 +135,11 @@ export const fetchOrderComplaints = async (orderNum: string): Promise<AdminCompl
       const data = await getAdminComplaints({ page, size: 100 })
       const rows = data.complaints ?? []
       matched.push(...rows.filter((item) => item.orderNum === orderNum))
-      if (matched.length > 0 || page + 1 >= (data.totalPages ?? 1)) {
-        break
-      }
+      if (rows.length < 100 || page + 1 >= (data.totalPages ?? Infinity) ||
+        (page + 1) * 100 >= (data.totalElements ?? Infinity)) return matched
     }
-    return matched
+    // The capped scan cannot establish a complete complaint history.
+    return null
   } catch (err) {
     console.warn('[order-supervision] 投诉列表不可用：', err)
     return null

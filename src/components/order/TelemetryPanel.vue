@@ -15,15 +15,22 @@ const TELEMETRY_POLL_MS = 10_000
 const telemetry = ref<TelemetrySummary | null>()
 const loading = ref(false)
 
+let requestSeq = 0
+let disposed = false
+let inFlightOrder = ''
 const refresh = async () => {
   const orderNum = props.orderNum
-  if (!orderNum) {
-    telemetry.value = null
-    return
-  }
+  if (disposed || (inFlightOrder === orderNum && loading.value)) return
+  const seq = ++requestSeq
+  if (!orderNum) { telemetry.value = null; loading.value = false; return }
+  inFlightOrder = orderNum
   loading.value = true
-  telemetry.value = await fetchOrderTelemetry(orderNum)
-  loading.value = false
+  try {
+    const result = await fetchOrderTelemetry(orderNum)
+    if (!disposed && seq === requestSeq) telemetry.value = result
+  } finally {
+    if (!disposed && seq === requestSeq) { loading.value = false; inFlightOrder = '' }
+  }
 }
 
 const metrics = computed(() => {
@@ -65,10 +72,13 @@ const stopPolling = () => {
 
 watch(
   () => props.orderNum,
-  async () => {
+  async (_orderNum, _old, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false; stopPolling() })
     stopPolling()
+    telemetry.value = undefined
     await refresh()
-    if (props.orderNum) {
+    if (active && !disposed && props.orderNum) {
       pollTimer = setInterval(() => {
         void refresh()
       }, TELEMETRY_POLL_MS)
@@ -77,7 +87,7 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
 </script>
 
 <template>
@@ -102,16 +112,16 @@ onBeforeUnmount(stopPolling)
 .panel-title {
   font-size: 1rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .empty-note {
   margin-top: 0.75rem;
   padding: 1rem;
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #fafafa;
-  color: #909399;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -123,15 +133,15 @@ onBeforeUnmount(stopPolling)
 
 .metric-cell {
   padding: 0.7rem 0.8rem;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--bg-sunken);
 }
 
 .metric-cell span {
   display: block;
   font-size: 0.78rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .metric-cell strong {
@@ -139,6 +149,6 @@ onBeforeUnmount(stopPolling)
   margin-top: 0.3rem;
   font-family: 'Fira Code', monospace;
   font-size: 0.98rem;
-  color: #303133;
+  color: var(--text-strong);
 }
 </style>

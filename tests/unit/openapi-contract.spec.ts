@@ -98,6 +98,9 @@ const spec = JSON.parse(readFileSync(specPath, 'utf8')) as {
 }
 
 describe('OpenAPI 契约（消费侧门禁）', () => {
+  it('契约采用 LF 换行，与跨平台 checkout 及同步脚本一致', () => {
+    expect(readFileSync(specPath, 'utf8')).not.toContain('\r')
+  })
   it('vendor 契约与 sha256 对账文件一致', () => {
     const shaFile = readFileSync(shaPath, 'utf8').trim().split(/\s+/)[0]
     const actual = createHash('sha256').update(readFileSync(specPath)).digest('hex')

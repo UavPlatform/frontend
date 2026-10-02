@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import OrderManagePanel from '../../src/components/order/OrderManagePanel.vue'
 import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../../src/types/admin'
 import type { MatchProgressFields } from '../../src/api/modules/order-supervision'
@@ -105,7 +105,9 @@ const findButton = (wrapper: VueWrapper, text: string) =>
 
 describe('订单争议处置（TASK-FRONTEND-005）', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
     fetchTaskApplications.mockResolvedValue([])
     fetchTaskEvidence.mockResolvedValue([])
     fetchOrderComplaints.mockResolvedValue([pendingComplaint])
@@ -187,5 +189,19 @@ describe('订单争议处置（TASK-FRONTEND-005）', () => {
     expect(wrapper.emitted('order-changed')).toBeUndefined()
     // 失败后备注草稿保留，可直接重试
     expect(approveAdminComplaint).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消退款确认不发请求，保留备注并可重新操作', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const wrapper = await mountPanel()
+    await wrapper.find('textarea').setValue('保留草稿')
+    await findButton(wrapper, '批准')!.trigger('click')
+    await flushPromises()
+    expect(approveAdminComplaint).not.toHaveBeenCalled()
+    expect(wrapper.find('textarea').element.value).toBe('保留草稿')
+    await findButton(wrapper, '批准')!.trigger('click')
+    await flushPromises()
+    expect(approveAdminComplaint).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
   })
 })

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
@@ -73,6 +73,7 @@ const pageOf = <T,>(content: T[]) => ({
   totalPages: 1,
 })
 
+const mounted: Array<ReturnType<typeof mount>> = []
 const mountView = async () => {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -81,15 +82,17 @@ const mountView = async () => {
   await router.push('/')
   await router.isReady()
   const wrapper = mount(OrderView, {
-    global: { plugins: [router, ElementPlus] },
+    // Navigation is covered by MainLayout tests; retain real tabs, tables and drawers here.
+    global: { plugins: [router, ElementPlus], stubs: { MainLayout: { template: '<div><slot /></div>' } } },
   })
+  mounted.push(wrapper)
   await flushPromises()
   return wrapper
 }
 
 describe('OrderView 任务/订单管理视图（1B-5b）', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     getAdminOrders.mockResolvedValue(
       pageOf([
         orderFixture(),
@@ -104,6 +107,11 @@ describe('OrderView 任务/订单管理视图（1B-5b）', () => {
       ]),
     )
     getAdminTasks.mockResolvedValue(pageOf([taskFixture()]))
+  })
+
+  afterEach(async () => {
+    for (const wrapper of mounted.splice(0)) wrapper.unmount()
+    await flushPromises()
   })
 
   it('默认加载订单分页（page 0 起）并渲染 C5 状态映射 4/5', async () => {

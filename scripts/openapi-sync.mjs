@@ -12,7 +12,7 @@
  *   OPENAPI_SOURCE=/path/to/spec.json pnpm api:sync
  */
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -35,9 +35,10 @@ if (!source) {
 }
 
 mkdirSync(vendorDir, { recursive: true })
-copyFileSync(source, vendorSpec)
+// Match the repository's LF checkout policy before hashing, including Windows exports.
+const content = Buffer.from(readFileSync(source, 'utf8').replace(/\r\n/g, '\n'), 'utf8')
+writeFileSync(vendorSpec, content)
 
-const content = readFileSync(vendorSpec)
 const sha256 = createHash('sha256').update(content).digest('hex')
 writeFileSync(vendorSha, `${sha256}  drone-backend.openapi.json\n`)
 

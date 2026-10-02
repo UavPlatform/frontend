@@ -73,9 +73,9 @@ describe('系统日志页（TASK-FRONTEND-005，自 AdminView 迁移）', () => 
     const wrapper = await mountView(buildRouter())
 
     const text = wrapper.text()
-    // 统一壳层（原 AdminView 断言迁移：标题 + 统一登出入口）
+    // 统一壳层（原 AdminView 断言迁移：标题 + 统一登出入口，登出为图标按钮按 aria-label 定位）
     expect(text).toContain('系统日志')
-    expect(text).toContain('退出登录')
+    expect(wrapper.find('[aria-label="退出登录"]').exists()).toBe(true)
     // 应用日志默认加载 100 行
     expect(getApplicationLogs).toHaveBeenCalledWith(100)
     expect(text).toContain('2026-09-26 INFO app started')

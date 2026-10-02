@@ -111,20 +111,20 @@ export const scanTasks = async (options: {
 }
 
 /** 任务索引：taskNum → 任务。订单列表据此补飞手名与「执行中」高亮。 */
-export const buildTaskIndex = async (): Promise<Map<string, AdminTaskVo>> => {
-  const { rows } = await scanTasks({ pageSize: SCAN_PAGE_SIZE, maxPages: TASK_INDEX_MAX_PAGES })
+export const buildTaskIndex = async () => {
+  const { rows, truncated } = await scanTasks({ pageSize: SCAN_PAGE_SIZE, maxPages: TASK_INDEX_MAX_PAGES })
   const index = new Map<string, AdminTaskVo>()
   for (const task of rows) {
     if (task.taskNum) {
       index.set(task.taskNum, task)
     }
   }
-  return index
+  return { index, truncated }
 }
 
 /** 执行中任务（首页飞行卡、订单列表 in_progress 筛选与置顶） */
-export const scanInProgressTasks = async (): Promise<AdminTaskVo[]> =>
-  (await scanTasks({ status: 'IN_PROGRESS', maxPages: SCAN_MAX_PAGES })).rows
+export const scanInProgressTasks = async (): Promise<ScanPage<AdminTaskVo>> =>
+  scanTasks({ status: 'IN_PROGRESS', maxPages: SCAN_MAX_PAGES })
 
 export interface PendingComplaints {
   rows: AdminComplaint[]
@@ -133,6 +133,15 @@ export interface PendingComplaints {
 
 /** 待处理投诉（status=PENDING）：订单列表 dispute=pending 筛选与首页待办共用 */
 export const fetchPendingComplaints = async (pageSize = SCAN_PAGE_SIZE): Promise<PendingComplaints> => {
-  const data = await getAdminComplaints({ page: 0, size: pageSize, status: 'PENDING' })
-  return { rows: data.complaints ?? [], truncated: (data.totalElements ?? 0) > pageSize }
+  const rows: AdminComplaint[] = []
+  for (let page = 0; page < SCAN_MAX_PAGES; page += 1) {
+    const data = await getAdminComplaints({ page, size: pageSize, status: 'PENDING' })
+    const content = data.complaints ?? []
+    rows.push(...content)
+    if (content.length < pageSize || rows.length >= (data.totalElements ?? Infinity) ||
+      (data.totalPages != null && page + 1 >= data.totalPages)) {
+      return { rows, truncated: false }
+    }
+  }
+  return { rows, truncated: true }
 }

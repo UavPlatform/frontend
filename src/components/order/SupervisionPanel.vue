@@ -105,24 +105,24 @@ const context = computed(() => [
 .section-title {
   font-size: 1.02rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .section-hint {
   margin-top: 0.3rem;
   font-size: 0.85rem;
-  color: #909399;
+  color: var(--text-secondary);
 }
 
 .context-panel {
-  border-color: #ebeef5;
-  background: #fafafa;
+  border-color: var(--border);
+  background: var(--bg-sunken);
 }
 
 .panel-title {
   font-size: 0.98rem;
   font-weight: 800;
-  color: #303133;
+  color: var(--text-strong);
 }
 
 .context-row {
@@ -131,11 +131,11 @@ const context = computed(() => [
   justify-content: space-between;
   gap: 0.75rem;
   font-size: 0.9rem;
-  color: #606266;
+  color: var(--text-regular);
 }
 
 .context-row strong {
-  color: #303133;
+  color: var(--text-strong);
   font-weight: 600;
   text-align: right;
 }
