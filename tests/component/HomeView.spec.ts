@@ -10,16 +10,15 @@ import type {
   AdminOrderVo,
   AdminTaskVo,
   OrderGpsPoint,
-  RiderStats,
 } from '../../src/types/admin'
 import { formatDateTime } from '../../src/utils/date'
 
-const { getAdminTasks, getAdminOrders, getAdminComplaints, getRegisteredRiders, getOrderTrajectory } =
+const { getAdminTasks, getAdminOrders, getAdminComplaints, getAdminPilots, getOrderTrajectory } =
   vi.hoisted(() => ({
     getAdminTasks: vi.fn(),
     getAdminOrders: vi.fn(),
     getAdminComplaints: vi.fn(),
-    getRegisteredRiders: vi.fn(),
+    getAdminPilots: vi.fn(),
     getOrderTrajectory: vi.fn(),
   }))
 
@@ -29,9 +28,8 @@ vi.mock('../../src/api/modules/admin-query', async () => {
     string,
     unknown
   >
-  return { ...actual, getAdminTasks, getAdminOrders, getAdminComplaints }
+  return { ...actual, getAdminTasks, getAdminOrders, getAdminComplaints, getAdminPilots }
 })
-vi.mock('../../src/api/modules/rider', () => ({ getRegisteredRiders }))
 vi.mock('../../src/api/modules/uav', () => ({ getOrderTrajectory }))
 
 const pageOf = <T,>(content: T[], totalElements = content.length) => ({
@@ -89,14 +87,6 @@ const complaintFixture: AdminComplaint = {
   createTime: formatDateTime(new Date()),
 }
 
-const riderFixture = (riderId: number, riderName: string): RiderStats => ({
-  riderId,
-  riderName,
-  todayOrders: 1,
-  totalCompleted: 3,
-  totalEarnings: 66,
-})
-
 const trajectoryFixture = (): OrderGpsPoint[] => {
   const now = Date.now()
   return [
@@ -120,6 +110,21 @@ const mountHome = async () => {
 }
 
 describe('首页看板（TASK-FRONTEND-002）', () => {
+  it('刷新失败展示错误且不伪造成功更新时间', async () => {
+    getAdminTasks.mockRejectedValueOnce(new Error('网络中断'))
+    const wrapper = await mountHome()
+    expect(wrapper.text()).toContain('网络中断')
+    expect(wrapper.text()).toContain('更新于 --:--:--')
+    expect(wrapper.text()).not.toContain('当前无飞行作业')
+  })
+
+  it('今日订单达到扫描上限时显示下界与不完整提示', async () => {
+    getAdminOrders.mockImplementation(async ({ status }: { status?: string }) => status === '5' ? pageOf([]) :
+      { ...pageOf(Array.from({ length: 100 }, (_, i) => todayOrder(`O-${i}`)), 600), totalPages: 6 })
+    const wrapper = await mountHome()
+    expect(wrapper.get('[data-testid="metric-today"]').text()).toContain('至少 500')
+    expect(wrapper.text()).toContain('部分数据未加载完整')
+  })
   beforeEach(async () => {
     vi.clearAllMocks()
     clearStoredSession()
@@ -138,7 +143,7 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
       totalElements: 3,
       totalPages: 1,
     })
-    getRegisteredRiders.mockResolvedValue([riderFixture(1, '李四'), riderFixture(2, '赵六')])
+    getAdminPilots.mockResolvedValue(pageOf([], 2))
     getOrderTrajectory.mockResolvedValue(trajectoryFixture())
   })
 
@@ -152,69 +157,66 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
 
   it('四指标卡渲染数值与更新时间戳', async () => {
     const w = await mountHome()
-    const cards = w.findAll('.metric-card')
 
-    expect(cards.find((card) => card.text().includes('正在飞行'))?.text()).toContain('1')
-    expect(cards.find((card) => card.text().includes('今日订单'))?.text()).toContain('2')
-    expect(cards.find((card) => card.text().includes('待处理争议'))?.text()).toContain('3')
-    expect(cards.find((card) => card.text().includes('在线飞手'))?.text()).toContain('1/2')
+    expect(w.find('[data-testid="metric-flying"]').text()).toContain('1')
+    expect(w.find('[data-testid="metric-today"]').text()).toContain('2')
+    expect(w.find('[data-testid="metric-dispute"]').text()).toContain('3')
+    expect(w.find('[data-testid="metric-pilot"]').text()).toContain('2')
     expect(w.text()).toContain('更新于')
   })
 
   it('指标卡点击带筛选跳转订单列表 / 飞手列表', async () => {
     const w = await mountHome()
-    const cards = w.findAll('.metric-card')
 
-    await cards.find((card) => card.text().includes('正在飞行'))!.trigger('click')
-    // 目标路由组件按需加载，等待导航真正落地（flushPromises 不足以覆盖模块加载）
+    await w.find('[data-testid="metric-flying"]').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('orders'))
     expect(router.currentRoute.value.query).toEqual({ status: 'in_progress' })
 
     await router.push('/')
-    await cards.find((card) => card.text().includes('待处理争议'))!.trigger('click')
+    await w.find('[data-testid="metric-dispute"]').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('orders'))
     expect(router.currentRoute.value.query).toEqual({ dispute: 'pending' })
 
     await router.push('/')
-    await cards.find((card) => card.text().includes('在线飞手'))!.trigger('click')
+    await w.find('[data-testid="metric-pilot"]').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('pilots'))
   })
 
-  it('飞行卡渲染路线/主体/遥测摘要与双按钮', async () => {
+  it('飞行表格渲染订单/主体/金额/遥测摘要与监管详情按钮', async () => {
     const w = await mountHome()
 
-    const card = w.find('.flying-card')
-    expect(card.exists()).toBe(true)
-    expect(card.text()).toContain('#ORD-F01')
-    expect(card.text()).toContain('工地A → 山顶B')
-    expect(card.text()).toContain('用户 王五')
-    expect(card.text()).toContain('飞手 李四')
-    expect(card.text()).toContain('高度 45.5 m')
-    expect(card.text()).toContain('速度 7.2 m/s')
-    expect(card.text()).toContain('电量 75%')
-    expect(card.text()).toContain('已飞 10 分钟')
+    const table = w.find('[data-testid="flying-table"]')
+    expect(table.exists()).toBe(true)
+    const text = table.text()
+    expect(text).toContain('ORD-F01')
+    expect(text).toContain('工地吊运')
+    expect(text).toContain('王五')
+    expect(text).toContain('李四')
+    expect(text).toContain('¥980.00')
+    expect(text).toContain('高度 45.5 m')
+    expect(text).toContain('速度 7.2 m/s')
+    expect(text).toContain('电量 75%')
+    expect(text).toContain('已飞 10 分钟')
 
-    const labels = card.findAll('button').map((button) => button.text())
-    expect(labels.some((label) => label.includes('任务监管'))).toBe(true)
+    const labels = table.findAll('button').map((button) => button.text())
+    expect(labels.some((label) => label.includes('监管'))).toBe(true)
     expect(labels.some((label) => label.includes('详情'))).toBe(true)
   })
 
-  it('飞行卡主体链接带定位参数跳实体列表（TASK-FRONTEND-004）', async () => {
+  it('飞行表格主体链接带定位参数跳实体列表（TASK-FRONTEND-004）', async () => {
     const w = await mountHome()
+    const table = w.find('[data-testid="flying-table"]')
 
-    const userLink = w
-      .find('.flying-card')
-      .findAll('button')
-      .find((button) => button.text().includes('用户 王五'))
+    const userLink = table.findAll('button').find((button) => button.text().includes('王五'))
     await userLink!.trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('users'))
     expect(router.currentRoute.value.query).toEqual({ id: '1' })
 
     await router.push('/')
     const pilotLink = w
-      .find('.flying-card')
+      .find('[data-testid="flying-table"]')
       .findAll('button')
-      .find((button) => button.text().includes('飞手 李四'))
+      .find((button) => button.text().includes('李四'))
     await pilotLink!.trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('pilots'))
     expect(router.currentRoute.value.query).toEqual({ q: '李四' })
@@ -223,22 +225,22 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
   it('侧栏快捷入口、待办与今日新发 Top5', async () => {
     const w = await mountHome()
 
-    const quickLabels = w.findAll('.quick-entry').map((entry) => entry.text())
+    const quickLabels = w.findAll('.quick-item').map((entry) => entry.text())
     expect(quickLabels).toEqual(
       expect.arrayContaining(['全部订单', '用户管理', '飞手管理', '系统日志']),
     )
 
-    const todos = w.findAll('.todo-item')
+    const todos = w.findAll('.todo')
     expect(todos).toHaveLength(2)
     expect(todos[0].text()).toContain('3 条待处理争议')
     expect(todos[0].text()).toContain('最新 ORD-D01 · 质量问题')
-    expect(todos[1].text()).toContain('2 单待验收超 24 小时')
+    expect(todos[1].text()).toContain('2 单创建超 24 小时且待验收')
     expect(todos[1].text()).toContain('ORD-W02')
 
-    const top5 = w.findAll('.el-table__row').map((row) => row.text())
+    const top5 = w.findAll('[data-testid="today-table"] .el-table__row').map((row) => row.text())
     expect(top5[0]).toContain('ORD-T01')
     expect(top5[1]).toContain('ORD-T02')
-    expect(w.text()).toContain('查看更多')
+    expect(w.text()).toContain('查看全部')
   })
 
   it('无飞行作业且无待办时展示空态并折叠待办', async () => {
@@ -252,17 +254,16 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
       totalElements: 0,
       totalPages: 0,
     })
-    getRegisteredRiders.mockResolvedValue([])
+    getAdminPilots.mockResolvedValue(pageOf([], 0))
 
     const w = await mountHome()
-    const cards = w.findAll('.metric-card')
 
     expect(w.text()).toContain('当前无飞行作业')
-    expect(w.find('.flying-card').exists()).toBe(false)
-    expect(w.find('.todo-item').exists()).toBe(false)
+    expect(w.find('[data-testid="flying-table"]').exists()).toBe(false)
+    expect(w.find('.todo').exists()).toBe(false)
     expect(w.text()).not.toContain('待办')
-    expect(cards.find((card) => card.text().includes('正在飞行'))?.text()).toContain('0')
-    expect(cards.find((card) => card.text().includes('在线飞手'))?.text()).toContain('0/0')
+    expect(w.find('[data-testid="metric-flying"]').text()).toContain('0')
+    expect(w.find('[data-testid="metric-pilot"]').text()).toContain('0')
     expect(getOrderTrajectory).not.toHaveBeenCalled()
   })
 

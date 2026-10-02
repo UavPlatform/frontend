@@ -35,7 +35,7 @@ const parseQuery = (query: Record<string, unknown>) => {
   return {
     q: String(query.q ?? ''),
     status: rawStatus === '1' || rawStatus === '0' ? rawStatus : '',
-    page: Math.max(1, Number(query.page) || 1),
+    page: (Number.isSafeInteger(Number(query.page)) && Number(query.page) > 0 ? Number(query.page) : 1),
     size: PAGE_SIZES.includes(size) ? size : 10,
     id: /^\d+$/.test(rawId) ? rawId : '',
   }

@@ -3,9 +3,10 @@ import router from '../../src/router'
 import { setStoredSession, clearStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
 
-// TASK-FRONTEND-001：壳层路由表——四项导航 + 次级系统页；旧一级路由已删除
+// TASK-FRONTEND-001：壳层路由表——四项导航 + 次级系统页 + 大屏展示落地页；旧一级路由已删除
 const shellRoutes: Array<[path: string, name: string]> = [
   ['/', 'home'],
+  ['/showcase', 'showcase'],
   ['/orders', 'orders'],
   ['/users', 'users'],
   ['/pilots', 'pilots'],
@@ -15,6 +16,11 @@ const shellRoutes: Array<[path: string, name: string]> = [
 const adminSession: AuthSession = {
   token: 'token',
   user: { username: 'admin', displayName: '张监管', role: 'ADMIN', teamName: '平台' },
+}
+
+const userSession: AuthSession = {
+  token: 'token',
+  user: { username: 'u1', displayName: '普通用户', role: 'USER', teamName: '平台' },
 }
 
 describe('壳层路由表（TASK-FRONTEND-001）', () => {
@@ -48,7 +54,7 @@ describe('壳层路由表（TASK-FRONTEND-001）', () => {
     expect(router.currentRoute.value.name).toBe('admin-login')
   })
 
-  it('已登录管理员访问登录页回落首页（登录后默认 /）', async () => {
+  it('已登录管理员访问登录页回落首页（登录成功落点）', async () => {
     setStoredSession(adminSession)
 
     await router.push('/pilots')
@@ -56,5 +62,12 @@ describe('壳层路由表（TASK-FRONTEND-001）', () => {
 
     await router.push('/admin/login')
     expect(router.currentRoute.value.name).toBe('home')
+  })
+
+  it('非 ADMIN 角色访问后台路由被拦回登录页', async () => {
+    setStoredSession(userSession)
+
+    await router.push('/orders')
+    expect(router.currentRoute.value.name).toBe('admin-login')
   })
 })

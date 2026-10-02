@@ -25,7 +25,7 @@ const parseQuery = (query: Record<string, unknown>) => {
   const size = Number(query.size)
   return {
     q: String(query.q ?? ''),
-    page: Math.max(1, Number(query.page) || 1),
+    page: (Number.isSafeInteger(Number(query.page)) && Number(query.page) > 0 ? Number(query.page) : 1),
     size: PAGE_SIZES.includes(size) ? size : 10,
   }
 }

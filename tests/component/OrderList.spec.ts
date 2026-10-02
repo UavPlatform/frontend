@@ -120,6 +120,20 @@ const rowsText = (wrapper: { findAll: (selector: string) => Array<{ text(): stri
   wrapper.findAll('.el-table__row').map((row) => row.text())
 
 describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
+  it('快速切换订单速览时，旧请求不能覆盖最新订单', async () => {
+    let resolveOld!: (value: AdminOrderVo) => void
+    getAdminOrderDetail.mockImplementation((orderNum: string) => orderNum === 'ORD-A'
+      ? new Promise<AdminOrderVo>((resolve) => { resolveOld = resolve }) : Promise.resolve(ordB))
+    const wrapper = await mountList()
+    const orderRows = wrapper.findAll('.el-table__row')
+    await orderRows.find((row) => row.text().includes('ORD-A'))!.find('button').trigger('click')
+    await orderRows.find((row) => row.text().includes('ORD-B'))!.find('button').trigger('click')
+    await flushPromises()
+    resolveOld(ordA)
+    await flushPromises()
+    expect(wrapper.find('.el-drawer').text()).toContain('ORD-B')
+    expect(wrapper.find('.el-drawer').text()).not.toContain('ORD-A')
+  })
   beforeEach(async () => {
     vi.clearAllMocks()
     clearStoredSession()
@@ -149,7 +163,7 @@ describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
     clearStoredSession()
   })
 
-  it('默认页：服务端分页，飞行中置顶高亮，飞手列来自任务索引', async () => {
+  it('默认页保持服务端分页边界，飞手列来自任务索引', async () => {
     const wrapper = await mountList()
 
     expect(getAdminOrders).toHaveBeenCalledWith({
@@ -161,13 +175,12 @@ describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
     })
 
     const rows = wrapper.findAll('.el-table__row')
-    expect(rows[0].text()).toContain('ORD-FLY')
-    expect(rows[0].classes()).toContain('flying-row')
-    expect(rows[0].text()).toContain('张三')
+    expect(rows).toHaveLength(2)
+    expect(rowsText(wrapper).join('')).not.toContain('ORD-FLY')
     expect(rowsText(wrapper).join('\n')).toContain('李四')
 
     const labels = wrapper.findAll('button').map((button) => button.text())
-    expect(labels.some((label) => label.includes('监管'))).toBe(true)
+    expect(labels.some((label) => label.includes('导出当前页'))).toBe(true)
   })
 
   it('行点击进订单详情页', async () => {
@@ -183,7 +196,7 @@ describe('订单列表 URL 筛选与行交互（TASK-FRONTEND-002）', () => {
   it('任务监管按钮进入全屏监管路由（TASK-FRONTEND-003）', async () => {
     expect(router.resolve('/orders/ORD-FLY/supervise').name).toBe('order-supervise')
 
-    const wrapper = await mountList()
+    const wrapper = await mountList('?status=in_progress')
     const superviseButton = wrapper
       .findAll('button')
       .find((button) => button.text().includes('监管'))!

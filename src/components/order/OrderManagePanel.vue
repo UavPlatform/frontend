@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { approveAdminComplaint, rejectAdminComplaint } from '../../api/modules/admin-query'
 import {
   buildMatchTimeline,
@@ -66,7 +66,9 @@ const applications = ref<TaskApplicationVo[] | null>()
 const evidence = ref<TaskEvidenceVo[] | null>()
 const complaints = ref<AdminComplaint[] | null>()
 
+let sideSeq = 0
 const loadSideData = async () => {
+  const seq = ++sideSeq
   applications.value = undefined
   evidence.value = undefined
   complaints.value = undefined
@@ -78,6 +80,7 @@ const loadSideData = async () => {
     taskNum ? fetchTaskEvidence(taskNum) : Promise.resolve(null),
     orderNum ? fetchOrderComplaints(orderNum) : Promise.resolve(null),
   ])
+  if (seq !== sideSeq) return
   applications.value = applicationRows
   evidence.value = evidenceRows
   complaints.value = complaintRows
@@ -179,12 +182,22 @@ const resolveComplaint = async (id: number, action: 'approve' | 'reject') => {
 
   actingId.value = id
   try {
+    const orderNum = props.order.orderNum
+    try {
+      await ElMessageBox.confirm(
+        action === 'approve'
+          ? `确认批准订单 ${orderNum} 的投诉 #${id} 并发起退款？退款金额以服务端核算为准。`
+          : `确认驳回订单 ${orderNum} 的投诉 #${id}？该操作将提交驳回理由。`,
+        '确认投诉处置', { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '取消' },
+      )
+    } catch { return }
+    if (props.order.orderNum !== orderNum) return
     if (action === 'approve') {
       await approveAdminComplaint(id, note || undefined)
       ElMessage.success('已批准投诉，退款已发起')
     } else {
       await rejectAdminComplaint(id, note)
-      ElMessage.success('已驳回投诉，订单恢复为已完成')
+      ElMessage.success('已驳回投诉，订单状态以刷新结果为准')
     }
     delete noteDrafts.value[id]
     await loadSideData()

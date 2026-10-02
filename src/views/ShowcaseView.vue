@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { getAdminStatistics } from '../api/modules/admin'
+import { getAdminOrders, getAdminTasks, getAdminPilots } from '../api/modules/admin-query'
+import type { AdminStatistics, AdminOrderVo, AdminTaskVo, AdminPilotVo } from '../types/admin'
+import { formatClock } from '../utils/date'
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,18 +18,50 @@ import { useFullscreen } from '../composables/useFullscreen'
 
 /**
  * 数据大屏展示（轮播）：
- * 登录后默认落地页，4 屏展示界面每 5 秒自动滑动切换，可手动切换/暂停（悬停）。
- * 各屏内容暂为占位，后续填充对应板块的实时数据。
+ * 4 屏展示实际平台统计及最新任务、订单、飞手，每 5 秒自动切换，可手动刷新。
  */
 const slides = [
   { key: 'overview', title: '平台总览', subtitle: '全平台关键指标一览', icon: Odometer },
-  { key: 'flight', title: '飞行实况', subtitle: '实时在飞任务与遥测', icon: Position },
+  { key: 'flight', title: '飞行实况', subtitle: '执行中任务与关联订单', icon: Position },
   { key: 'order', title: '订单监控', subtitle: '订单流转与履约状态', icon: Tickets },
-  { key: 'pilot', title: '飞手调度', subtitle: '在线飞手与应征动态', icon: Avatar },
+  { key: 'pilot', title: '飞手调度', subtitle: '在册飞手与完成单统计', icon: Avatar },
 ]
 
 const current = ref(0)
 const INTERVAL_MS = 5000
+const loading = ref(false)
+const error = ref('')
+const updatedAt = ref('—')
+const statistics = ref<AdminStatistics>()
+const tasks = ref<AdminTaskVo[]>([])
+const orders = ref<AdminOrderVo[]>([])
+const pilots = ref<AdminPilotVo[]>([])
+const overview = computed(() => [
+  { label: '无人机总数', value: statistics.value?.totalUavs },
+  { label: '在线无人机', value: statistics.value?.onlineUavs },
+  { label: '可用无人机', value: statistics.value?.availableUavs },
+  { label: '直播中无人机', value: statistics.value?.liveUavs },
+])
+let loadSeq = 0
+const refresh = async () => {
+  const seq = ++loadSeq
+  loading.value = true
+  error.value = ''
+  try {
+    const [stats, taskPage, orderPage, pilotPage] = await Promise.all([
+      getAdminStatistics(), getAdminTasks({ page: 0, size: 10, status: 'IN_PROGRESS' }),
+      getAdminOrders({ page: 0, size: 10 }), getAdminPilots({ page: 0, size: 10 }),
+    ])
+    if (seq !== loadSeq) return
+    statistics.value = stats
+    tasks.value = taskPage.content
+    orders.value = orderPage.content
+    pilots.value = pilotPage.content
+    updatedAt.value = formatClock()
+  } catch (err) {
+    if (seq === loadSeq) error.value = err instanceof Error ? err.message : '加载大屏数据失败'
+  } finally { if (seq === loadSeq) loading.value = false }
+}
 
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
@@ -53,13 +89,18 @@ const goTo = (index: number) => {
 const next = () => goTo((current.value + 1) % slides.length)
 const prev = () => goTo((current.value - 1 + slides.length) % slides.length)
 
-onMounted(start)
-onBeforeUnmount(stop)
+onMounted(() => { start(); void refresh() })
+onBeforeUnmount(() => { stop(); loadSeq += 1 })
 </script>
 
 <template>
   <MainLayout title="大屏展示" subtitle="数据大屏轮播：每 5 秒自动切换，悬停可暂停，下方圆点可手动跳转。">
     <div class="showcase" @mouseenter="stop" @mouseleave="start">
+      <div class="flex items-center justify-between">
+        <span class="text-sm">更新于 {{ updatedAt }} · 列表展示最新 10 条，完整数据请进入对应管理页</span>
+        <el-button :loading="loading" @click="refresh">刷新数据</el-button>
+      </div>
+      <el-alert v-if="error" :title="error + '，请刷新重试。已有数据可能已过期。'" type="error" :closable="false" />
       <div class="showcase__viewport">
         <div class="showcase__track" :style="{ transform: `translateX(-${current * 100}%)` }">
           <section
@@ -81,13 +122,29 @@ onBeforeUnmount(stop)
               </span>
             </div>
 
-            <div class="slide__body">
-              <div class="slide__placeholder">
-                <span class="slide__placeholder-icon">
-                  <el-icon><component :is="slide.icon" /></el-icon>
-                </span>
-                <span class="slide__placeholder-text">内容待填充</span>
+            <div class="slide__body" v-loading="loading">
+              <div v-if="slide.key === 'overview'" class="overview-grid">
+                <div v-for="metric in overview" :key="metric.label" class="overview-metric">
+                  <span>{{ metric.label }}</span><strong>{{ metric.value ?? '—' }}</strong>
+                </div>
               </div>
+              <el-table v-else-if="slide.key === 'flight'" :data="tasks" height="100%" empty-text="暂无执行中任务">
+                <el-table-column prop="taskNum" label="任务编号" min-width="160" />
+                <el-table-column prop="taskName" label="任务名称" min-width="160" />
+                <el-table-column prop="riderName" label="飞手" min-width="120" />
+                <el-table-column prop="orderNum" label="订单号" min-width="160" />
+              </el-table>
+              <el-table v-else-if="slide.key === 'order'" :data="orders" height="100%" empty-text="暂无订单">
+                <el-table-column prop="orderNum" label="订单号" min-width="160" />
+                <el-table-column prop="taskName" label="任务名称" min-width="160" />
+                <el-table-column prop="ownerName" label="下单用户" min-width="120" />
+                <el-table-column prop="orderStatusDesc" label="状态" min-width="120" />
+              </el-table>
+              <el-table v-else :data="pilots" height="100%" empty-text="暂无在册飞手">
+                <el-table-column prop="userId" label="飞手 ID" min-width="120" />
+                <el-table-column prop="userName" label="昵称" min-width="160" />
+                <el-table-column prop="completedCount" label="累计完成单" min-width="120" />
+              </el-table>
             </div>
           </section>
         </div>
@@ -121,6 +178,9 @@ onBeforeUnmount(stop)
 </template>
 
 <style scoped>
+.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 100%; }
+.overview-metric { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: var(--bg-sunken); border-radius: 12px; }
+.overview-metric strong { font-size: clamp(30px, 4vw, 60px); color: var(--brand); }
 .showcase {
   display: flex;
   flex-direction: column;

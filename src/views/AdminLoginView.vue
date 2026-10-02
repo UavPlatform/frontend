@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Key, User } from '@element-plus/icons-vue'
 import { adminLogin } from '../api/modules/admin'
 
 const router = useRouter()
+const route = useRoute()
 
 const loginLoading = ref(false)
 const loginForm = reactive({
@@ -14,6 +15,7 @@ const loginForm = reactive({
 })
 
 const handleLogin = async () => {
+  if (loginLoading.value) return
   if (!loginForm.name.trim()) {
     ElMessage.warning('请输入管理员账号')
     return
@@ -28,13 +30,15 @@ const handleLogin = async () => {
 
   try {
     const result = await adminLogin({
-      name: loginForm.name,
+      name: loginForm.name.trim(),
       password: loginForm.password
     })
 
     if (result.success) {
       ElMessage.success('管理员登录成功')
-      router.push({ name: 'showcase' })
+      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+      const target = redirect.startsWith('/') && !redirect.startsWith('//') ? router.resolve(redirect) : undefined
+      await router.replace(target?.meta.requiresAdmin ? target.fullPath : { name: 'home' })
     } else {
       ElMessage.error(result.message || '登录失败')
     }
@@ -56,6 +60,8 @@ const handleLogin = async () => {
         <h1 class="login-title">管理员登录</h1>
         <p class="login-subtitle">无人机管理系统 - 管理中心</p>
       </div>
+
+      <el-alert v-if="route.query.reason === 'expired'" title="登录已过期，请重新登录后继续操作。" type="warning" :closable="false" class="mb-4" />
 
       <el-form label-position="top" @submit.prevent="handleLogin">
         <el-form-item label="管理员账号">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import TrtcPlayer from '../TrtcPlayer.vue'
+import { defineAsyncComponent, ref, watch } from 'vue'
+const TrtcPlayer = defineAsyncComponent(() => import('../TrtcPlayer.vue').then((module) => module.default))
 import { fetchWatchCredentials } from '../../api/modules/order-supervision'
 import type { TaskProgressive } from '../../api/modules/order-supervision'
 import type { LiveCredentials } from '../../types/uav'
@@ -30,7 +30,9 @@ const onPlayerError = (message: string) => {
 
 watch(
   () => props.deviceId,
-  async (deviceId) => {
+  async (deviceId, _previous, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false })
     credentials.value = null
     if (deviceId === undefined) {
       stage.value = 'resolving'
@@ -47,6 +49,7 @@ watch(
     stage.value = 'resolving'
     note.value = ''
     const pulled = await fetchWatchCredentials(deviceId)
+    if (!active) return
     if (!pulled) {
       stage.value = 'waiting'
       note.value = '图传未就绪：设备离线或未开播（只读接入，不会下发开播命令）'

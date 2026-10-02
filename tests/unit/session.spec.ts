@@ -56,4 +56,16 @@ describe('session 存储（uav-console-session）', () => {
     expect(getStoredSession()).toBeNull()
     expect(hasSessionToken()).toBe(false)
   })
+
+  it.each([null, [], { token: 't' }, { token: 1, user: {} }])('拒绝结构损坏的会话：%j', (value) => {
+    window.localStorage.setItem('uav-console-session', JSON.stringify(value))
+    expect(getStoredSession()).toBeNull()
+    expect(hasSessionToken()).toBe(false)
+  })
+
+  it('会话失效时同时移除访问书签', () => {
+    window.localStorage.setItem('uav-console-tabs', '[{"path":"/orders/private"}]')
+    clearStoredSession()
+    expect(window.localStorage.getItem('uav-console-tabs')).toBeNull()
+  })
 })

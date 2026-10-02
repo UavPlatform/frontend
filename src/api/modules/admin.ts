@@ -22,7 +22,7 @@ export const adminLogin = async (data: AdminLoginRequest): Promise<{ success: bo
   }
 
   return {
-    success: body.success ?? false,
+    success: Boolean(body.success && body.data?.token && body.data.admin),
     message: body.message ?? '',
   }
 }
@@ -32,15 +32,7 @@ export const getAdminStatistics = async (): Promise<AdminStatistics> => {
   const body = await apiGet('/admin/uav/statistics')
 
   if (!body.success || !body.data) {
-    return {
-      totalUavs: 0,
-      onlineUavs: 0,
-      availableUavs: 0,
-      liveUavs: 0,
-      offlineUavs: 0,
-      unavailableUavs: 0,
-      totalUsers: 0,
-    }
+    throw new Error(body.message ?? '获取平台统计失败')
   }
 
   return body.data

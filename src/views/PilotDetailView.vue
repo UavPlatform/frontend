@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import RelatedOrdersTable from '../components/subject/RelatedOrdersTable.vue'
 import { getAdminPilotDetail } from '../api/modules/admin-query'
@@ -72,9 +72,10 @@ const isDroneDisabled = (drone: AdminPilotDroneVo) =>
   drone.available === null ||
   drone.available === undefined ||
   !drone.djiId ||
-  toggling.value === drone.djiId
+  Boolean(toggling.value)
 
 const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
+  if (toggling.value) return
   if (drone.available === null || drone.available === undefined) {
     ElMessage.warning('该设备未注册档案，无法修改可用状态')
     return
@@ -86,6 +87,12 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
 
   toggling.value = drone.djiId
   try {
+    const pilotId = userId.value
+    try {
+      await ElMessageBox.confirm(`确认${next ? '启用' : '禁用'}无人机 ${drone.djiId}？这将修改设备的可用状态。`,
+        '确认设备状态变更', { type: 'warning', confirmButtonText: '确认修改', cancelButtonText: '取消' })
+    } catch { return }
+    if (userId.value !== pilotId) return
     await updateUavAvailable(drone.djiId, next ? '1' : '0')
     ElMessage.success(next ? '无人机已启用' : '无人机已禁用')
     await reload()

@@ -15,15 +15,22 @@ const TELEMETRY_POLL_MS = 10_000
 const telemetry = ref<TelemetrySummary | null>()
 const loading = ref(false)
 
+let requestSeq = 0
+let disposed = false
+let inFlightOrder = ''
 const refresh = async () => {
   const orderNum = props.orderNum
-  if (!orderNum) {
-    telemetry.value = null
-    return
-  }
+  if (disposed || (inFlightOrder === orderNum && loading.value)) return
+  const seq = ++requestSeq
+  if (!orderNum) { telemetry.value = null; loading.value = false; return }
+  inFlightOrder = orderNum
   loading.value = true
-  telemetry.value = await fetchOrderTelemetry(orderNum)
-  loading.value = false
+  try {
+    const result = await fetchOrderTelemetry(orderNum)
+    if (!disposed && seq === requestSeq) telemetry.value = result
+  } finally {
+    if (!disposed && seq === requestSeq) { loading.value = false; inFlightOrder = '' }
+  }
 }
 
 const metrics = computed(() => {
@@ -65,10 +72,13 @@ const stopPolling = () => {
 
 watch(
   () => props.orderNum,
-  async () => {
+  async (_orderNum, _old, onCleanup) => {
+    let active = true
+    onCleanup(() => { active = false; stopPolling() })
     stopPolling()
+    telemetry.value = undefined
     await refresh()
-    if (props.orderNum) {
+    if (active && !disposed && props.orderNum) {
       pollTimer = setInterval(() => {
         void refresh()
       }, TELEMETRY_POLL_MS)
@@ -77,7 +87,7 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
 </script>
 
 <template>

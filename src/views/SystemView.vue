@@ -5,6 +5,7 @@ import { Refresh, Search } from '@element-plus/icons-vue'
 import MainLayout from '../layouts/MainLayout.vue'
 import { getApplicationLogs, getErrorLogs, getLogFiles, readLogFile } from '../api/modules/admin'
 import type { AdminLogFile } from '../types/admin'
+import { filterEntries, toEntries, type LogLevel } from '../utils/log'
 
 /**
  * 系统日志（REQ-FRONTEND-001 §5，次级入口 /system）：
@@ -13,7 +14,6 @@ import type { AdminLogFile } from '../types/admin'
  * 日志板块自旧 AdminView 迁移（TASK-FRONTEND-005），旧页面已随 ADR-0004 删除。
  */
 type LogTab = 'application' | 'error' | 'files'
-type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'OTHER'
 
 const activeTab = ref<LogTab>('application')
 const logLines = ref(100)
@@ -35,34 +35,9 @@ const openedFile = ref('')
 const fileContent = ref<string[]>([])
 const fileLoading = ref(false)
 
-/** 从一行日志推断级别（ERROR/WARN/INFO/DEBUG），其余归 OTHER */
-const levelOf = (line: string): LogLevel => {
-  if (/\b(ERROR|EXCEPTION|FATAL|FAILED)\b/i.test(line)) return 'ERROR'
-  if (/\b(WARN|WARNING)\b/i.test(line)) return 'WARN'
-  if (/\bINFO\b/i.test(line)) return 'INFO'
-  if (/\b(DEBUG|TRACE)\b/i.test(line)) return 'DEBUG'
-  return 'OTHER'
-}
-
-interface LogEntry {
-  line: string
-  level: LogLevel
-}
-
-const filterEntries = (lines: string[]): LogEntry[] => {
-  const kw = keyword.value.trim().toLowerCase()
-  return lines
-    .map((line) => ({ line, level: levelOf(line) }))
-    .filter((entry) => {
-      if (levelFilter.value !== 'ALL' && entry.level !== levelFilter.value) return false
-      if (kw && !entry.line.toLowerCase().includes(kw)) return false
-      return true
-    })
-}
-
-const appEntries = computed(() => filterEntries(appLogs.value))
-const errorEntries = computed(() => filterEntries(errorLogs.value))
-const fileEntries = computed(() => filterEntries(fileContent.value))
+const appEntries = computed(() => filterEntries(toEntries(appLogs.value), levelFilter.value, keyword.value))
+const errorEntries = computed(() => filterEntries(toEntries(errorLogs.value), levelFilter.value, keyword.value))
+const fileEntries = computed(() => filterEntries(toEntries(fileContent.value), levelFilter.value, keyword.value))
 
 const formatSize = (size?: number) => {
   if (size == null) return '—'

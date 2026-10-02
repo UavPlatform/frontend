@@ -101,7 +101,7 @@ describe('request.ts 401 刷新链（WEB P1-11 / 1A-6d）', () => {
 
     expect(window.localStorage.getItem('uav-console-session')).toBeNull()
     // 1B-5b（Q7=A）：运营台仅管理员单入口，登出统一回 admin-login
-    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalledWith({ name: 'admin-login' }))
+    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalledWith({ name: 'admin-login', query: { reason: 'expired' } }))
   })
 
   it('并发 401 单飞刷新：/user/refresh 仅调用一次，请求均被重放', async () => {
@@ -136,7 +136,7 @@ describe('request.ts 401 刷新链（WEB P1-11 / 1A-6d）', () => {
 
     expect(rawPost).toHaveBeenCalledTimes(1)
     // 1B-5b（Q7=A）：运营台仅管理员单入口，登出统一回 admin-login
-    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalledWith({ name: 'admin-login' }))
+    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalledWith({ name: 'admin-login', query: { reason: 'expired' } }))
   })
 
   it('非 401 的 4xx 业务错误维持 resolve 语义，不触发刷新', async () => {
@@ -156,5 +156,32 @@ describe('request.ts 401 刷新链（WEB P1-11 / 1A-6d）', () => {
     const out = requestInterceptor({ headers: {} }) as { headers: Record<string, string> }
 
     expect(out.headers.Authorization).toBe('Bearer stale-token')
+  })
+
+  it('真实管理员会话无刷新令牌：401 后直接重新登录，不调用用户刷新接口', async () => {
+    setStoredSession({ token: 'admin-token', user: { username: 'admin', displayName: '管理员', role: 'ADMIN', teamName: 'Admin' } })
+    await expect(responseErrorHandler(buildError(401, { url: '/admin/orders' }))).rejects.toBeDefined()
+    expect(rawPost).not.toHaveBeenCalled()
+    expect(getStoredSession()).toBeNull()
+    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalled())
+  })
+
+  it('登录请求 401 不触发刷新或过期重定向', async () => {
+    await expect(responseErrorHandler(buildError(401, { url: '/admin/login' }))).rejects.toBeDefined()
+    expect(rawPost).not.toHaveBeenCalled()
+    expect(routerReplace).not.toHaveBeenCalled()
+  })
+
+  it('退出后晚返回的刷新请求不能恢复会话', async () => {
+    setStoredSession(buildSession())
+    let complete!: (value: unknown) => void
+    rawPost.mockReturnValueOnce(new Promise((resolve) => { complete = resolve }))
+    const pending = responseErrorHandler(buildError(401, { url: '/admin/orders' }))
+    window.localStorage.clear()
+    complete({ data: { success: true, data: { token: 'late-token' } } })
+    await expect(pending).rejects.toBeDefined()
+    expect(getStoredSession()).toBeNull()
+    expect(replayCall).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(routerReplace).toHaveBeenCalled())
   })
 })

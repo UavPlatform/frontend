@@ -97,7 +97,7 @@ router.beforeEach((to) => {
   const isAdmin = getStoredSession()?.user?.role === 'ADMIN'
 
   if (to.meta.requiresAuth && !authed) {
-    return { name: 'admin-login' }
+    return { name: 'admin-login', query: { redirect: to.fullPath } }
   }
 
   if (to.meta.requiresAdmin && !isAdmin) {
@@ -105,7 +105,7 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'admin-login' && authed && isAdmin) {
-    return { name: 'showcase' }
+    return { name: 'home' }
   }
 
   return true

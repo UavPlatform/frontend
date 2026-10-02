@@ -40,6 +40,9 @@ export const useOrderDetail = (orderNum: Ref<string>): OrderDetailState => {
   const reload = async () => {
     const seq = ++loadSeq
     loading.value = true
+    order.value = undefined
+    task.value = undefined
+    liveDetail.value = undefined
     try {
       const detail = await getAdminOrderDetail(orderNum.value)
       if (seq !== loadSeq) return

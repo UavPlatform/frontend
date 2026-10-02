@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import TRTC from 'trtc-sdk-v5'
 import type { LiveCredentials } from '../types/uav'
 
@@ -14,13 +14,16 @@ const emit = defineEmits<{
 }>()
 
 const videoContainer = ref<HTMLDivElement | null>(null)
-const trtcClient = ref<TRTC | null>(null)
+const trtcClient = shallowRef<TRTC | null>(null)
+let generation = 0
+let disposed = false
+let transition = Promise.resolve()
 const isConnecting = ref(false)
 const isConnected = ref(false)
 const remoteUserId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 
-const initTRTC = async () => {
+const initTRTC = async (attempt: number) => {
   if (!props.credentials) {
     return
   }
@@ -37,29 +40,31 @@ const initTRTC = async () => {
   errorMessage.value = null
 
   try {
-    trtcClient.value = TRTC.create()
+    const client = TRTC.create()
+    trtcClient.value = client
 
-    trtcClient.value.on(TRTC.EVENT.ERROR, (error: { code: number; message: string }) => {
+    client.on(TRTC.EVENT.ERROR, (error: { code: number; message: string }) => {
+      if (disposed || attempt !== generation) return
       console.error('TRTC error:', error)
       errorMessage.value = `TRTC 错误: ${error.message}`
       emit('error', errorMessage.value)
     })
 
-    trtcClient.value.on(TRTC.EVENT.REMOTE_VIDEO_AVAILABLE, (event: { userId: string }) => {
-      console.log('Remote video available:', event.userId)
+    client.on(TRTC.EVENT.REMOTE_VIDEO_AVAILABLE, (event: { userId: string }) => {
+      if (disposed || attempt !== generation) return
       remoteUserId.value = event.userId
       startRemoteVideo(event.userId)
     })
 
-    trtcClient.value.on(TRTC.EVENT.REMOTE_VIDEO_UNAVAILABLE, (event: { userId: string }) => {
-      console.log('Remote video unavailable:', event.userId)
+    client.on(TRTC.EVENT.REMOTE_VIDEO_UNAVAILABLE, (event: { userId: string }) => {
+      if (disposed || attempt !== generation) return
       if (remoteUserId.value === event.userId) {
         remoteUserId.value = null
       }
     })
 
-    trtcClient.value.on(TRTC.EVENT.REMOTE_USER_EXIT, (event: { userId: string }) => {
-      console.log('Remote user exit:', event.userId)
+    client.on(TRTC.EVENT.REMOTE_USER_EXIT, (event: { userId: string }) => {
+      if (disposed || attempt !== generation) return
       if (remoteUserId.value === event.userId) {
         remoteUserId.value = null
         isConnected.value = false
@@ -67,17 +72,18 @@ const initTRTC = async () => {
       }
     })
 
-    await trtcClient.value.enterRoom({
+    await client.enterRoom({
       sdkAppId,
       userId,
       userSig,
       strRoomId: roomId,
     })
 
-    console.log('Entered TRTC room:', roomId)
+    if (disposed || attempt !== generation) return
     isConnected.value = true
     emit('connected')
   } catch (error) {
+    if (disposed || attempt !== generation) return
     console.error('Failed to init TRTC:', error)
     errorMessage.value = error instanceof Error ? error.message : '初始化直播失败'
     emit('error', errorMessage.value)
@@ -87,6 +93,7 @@ const initTRTC = async () => {
 }
 
 const startRemoteVideo = async (userId: string) => {
+  const attempt = generation
   if (!trtcClient.value || !videoContainer.value) {
     return
   }
@@ -108,6 +115,7 @@ const startRemoteVideo = async (userId: string) => {
 
     console.log('Started remote video for user:', userId)
   } catch (error) {
+    if (disposed || attempt !== generation) return
     console.error('Failed to start remote video:', error)
     errorMessage.value = error instanceof Error ? error.message : '播放视频流失败'
     emit('error', errorMessage.value)
@@ -115,48 +123,44 @@ const startRemoteVideo = async (userId: string) => {
 }
 
 const cleanup = async () => {
-  if (trtcClient.value) {
+  const client = trtcClient.value
+  trtcClient.value = null
+  if (client) {
     try {
       if (remoteUserId.value) {
-        await trtcClient.value.stopRemoteVideo({ userId: remoteUserId.value, streamType: TRTC.TYPE.STREAM_TYPE_MAIN })
+        await client.stopRemoteVideo({ userId: remoteUserId.value, streamType: TRTC.TYPE.STREAM_TYPE_MAIN })
       }
-      await trtcClient.value.exitRoom()
-      trtcClient.value.destroy()
-      console.log('TRTC client cleaned up')
-    } catch (error) {
-      console.error('Failed to cleanup TRTC:', error)
-    }
-    trtcClient.value = null
+    } catch (error) { console.error('Failed to stop remote video:', error) }
+    try { await client.exitRoom() }
+    catch (error) { console.error('Failed to exit TRTC room:', error) }
+    finally { client.destroy() }
   }
-
-  if (videoContainer.value) {
-    videoContainer.value.innerHTML = ''
-  }
-
+  if (videoContainer.value) videoContainer.value.innerHTML = ''
   isConnected.value = false
+  isConnecting.value = false
+  errorMessage.value = null
   remoteUserId.value = null
 }
 
 watch(
-  () => props.credentials,
-  async (newCredentials, oldCredentials) => {
-    if (newCredentials?.roomId !== oldCredentials?.roomId) {
+  () => props.credentials ? [props.credentials.roomId, props.credentials.userId,
+    props.credentials.userSig, props.credentials.sdkAppId] : null,
+  () => {
+    const attempt = ++generation
+    transition = transition.then(async () => {
       await cleanup()
-      if (newCredentials) {
-        await initTRTC()
-      }
-    }
+      if (disposed || attempt !== generation || !props.credentials) return
+      await nextTick()
+      await initTRTC(attempt)
+    }).catch((error) => { console.error('Failed to switch TRTC room:', error) })
   },
+  { immediate: true },
 )
 
-onMounted(() => {
-  if (props.credentials) {
-    initTRTC()
-  }
-})
-
 onBeforeUnmount(() => {
-  cleanup()
+  disposed = true
+  generation += 1
+  transition = transition.then(cleanup)
 })
 </script>
 

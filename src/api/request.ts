@@ -37,6 +37,9 @@ const doRefreshAccessToken = async (): Promise<string | null> => {
     if (!response.data.success || !newToken) {
       return null
     }
+    // A refresh completing after logout/account switch must never restore the old session.
+    const current = getStoredSession()
+    if (current?.token !== session.token || current?.refreshToken !== session.refreshToken) return null
 
     // 后端不轮换 refreshToken：仅原地更新 access token，保留 username/role 等会话字段
     setStoredSession({ ...session, token: newToken })
@@ -73,7 +76,10 @@ const handleAuthFailure = () => {
   // Q7=A：运营台仅管理员单入口，登出一律回 /admin/login
   void import('../router').then(async ({ default: router }) => {
     try {
-      await router.replace({ name: 'admin-login' })
+      const redirect = router.currentRoute.value.fullPath
+      await router.replace({ name: 'admin-login', query: {
+        reason: 'expired', ...(redirect && redirect !== '/admin/login' ? { redirect } : {}),
+      } })
     } finally {
       authFailureHandling = false
     }
@@ -96,7 +102,7 @@ request.interceptors.request.use((config) => {
 })
 
 /** 已重放标记：每个请求只允许一次「刷新 → 重放」，重放后仍 401 则登出 */
-const retriedRequests = new WeakSet<object>()
+// Axios clones configs during replay; a config field survives that clone, unlike WeakSet identity.
 
 request.interceptors.response.use(
   (response) => response,
@@ -105,11 +111,15 @@ request.interceptors.response.use(
     const body = error.response?.data
 
     if (status === 401 && error.config) {
-      if (!retriedRequests.has(error.config)) {
+      if (error.config.url === '/admin/login') return Promise.reject(error)
+      if (!error.config._authRetried) {
+        const sessionBeforeRefresh = getStoredSession()
         const newToken = await refreshAccessTokenOnce()
+        const current = getStoredSession()
+        if (!newToken && current && current.token !== sessionBeforeRefresh?.token) return Promise.reject(error)
 
         if (newToken) {
-          retriedRequests.add(error.config)
+          error.config._authRetried = true
           // 重放：request 拦截器会从（已更新的）会话注入新 access token
           return request(error.config)
         }

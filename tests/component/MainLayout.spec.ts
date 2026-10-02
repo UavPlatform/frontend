@@ -6,9 +6,11 @@ import MainLayout from '../../src/layouts/MainLayout.vue'
 import { setStoredSession, clearStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
 
-// TASK-FRONTEND-001：壳层四项主导航（首页/订单/用户/飞手）+ 次级系统日志入口
+// TASK-FRONTEND-001：壳层主导航（大屏展示 + 首页/订单/用户/飞手 + 系统日志）
+// 菜单项通过 data-testid 定位（不依赖类名/文案），只断言行为：跳转与激活态。
 const routes = [
   { path: '/', name: 'home', component: { template: '<div />' } },
+  { path: '/showcase', name: 'showcase', component: { template: '<div />' } },
   { path: '/orders', name: 'orders', component: { template: '<div />' } },
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
@@ -35,58 +37,56 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
       user: { username: 'admin', displayName: '张监管', role: 'ADMIN', teamName: '平台' },
     }
     setStoredSession(session)
+    window.localStorage.removeItem('uav-console-tabs')
   })
 
-  it('品牌为吊运监管平台，侧边菜单为四项主导航', async () => {
+  it('侧边菜单包含五项可用主导航', async () => {
     const { wrapper } = await mountLayout()
 
-    const sidebarButtons = wrapper.findAll('aside button')
-    const labels = sidebarButtons.map((button) => button.text())
-    expect(labels).toContain('首页')
-    expect(labels).toContain('订单')
-    expect(labels).toContain('用户')
-    expect(labels).toContain('飞手')
-
-    // 旧导航项不得回归
-    expect(labels).not.toContain('无人机总览')
-    expect(labels).not.toContain('历史记录')
-    expect(labels).not.toContain('管理员中心')
-
-    expect(wrapper.text()).toContain('吊运监管平台')
-    expect(wrapper.text()).not.toContain('空域指挥台')
+    const testids = wrapper.findAll('[data-testid^="menu-"]').map((item) => item.attributes('data-testid'))
+    expect(testids).toEqual(
+      expect.arrayContaining([
+        'menu-home',
+        'menu-orders',
+        'menu-users',
+        'menu-pilots',
+        'menu-system',
+      ]),
+    )
   })
 
   it('点击菜单项切换到对应路由', async () => {
     const { wrapper, router } = await mountLayout()
 
-    const clickMenu = async (label: string) => {
-      const button = wrapper.findAll('aside button').find((item) => item.text().includes(label))
-      await button!.trigger('click')
+    const clickMenu = async (testid: string) => {
+      const item = wrapper.find(`[data-testid="${testid}"]`)
+      expect(item.exists()).toBe(true)
+      await item.trigger('click')
       await flushPromises()
     }
 
-    await clickMenu('用户')
+    await clickMenu('menu-users')
     expect(router.currentRoute.value.name).toBe('users')
 
-    await clickMenu('飞手')
+    await clickMenu('menu-pilots')
     expect(router.currentRoute.value.name).toBe('pilots')
 
-    await clickMenu('订单')
+    await clickMenu('menu-orders')
     expect(router.currentRoute.value.name).toBe('orders')
 
-    await clickMenu('首页')
+    await clickMenu('menu-home')
     expect(router.currentRoute.value.name).toBe('home')
   })
 
-  it('次级入口系统日志可跳转且当前路由高亮', async () => {
+  it('系统日志入口可跳转且当前路由高亮', async () => {
     const { wrapper, router } = await mountLayout()
 
-    const systemButton = wrapper.findAll('aside button').find((item) => item.text().includes('系统日志'))
-    expect(systemButton).toBeTruthy()
+    const systemItem = wrapper.find('[data-testid="menu-system"]')
+    expect(systemItem.exists()).toBe(true)
 
-    await systemButton!.trigger('click')
+    await systemItem.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('system')
-    expect(systemButton!.classes()).toContain('menu-item-active')
+    expect(systemItem.classes()).toContain('is-active')
   })
 })

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import PilotDetailView from '../../src/views/PilotDetailView.vue'
 import router from '../../src/router'
 import { clearStoredSession, setStoredSession } from '../../src/api/session'
@@ -68,8 +68,18 @@ const mountDetail = async (id = '11') => {
 }
 
 describe('飞手详情：绑定无人机与合规开关（TASK-FRONTEND-004）', () => {
+  it('取消设备变更确认不提交接口', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    const wrapper = await mountDetail()
+    await wrapper.findAll('.el-switch')[0].trigger('click')
+    await flushPromises()
+    expect(updateUavAvailable).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.el-switch')[0].classes()).toContain('is-checked')
+  })
   beforeEach(async () => {
+    vi.restoreAllMocks()
     vi.clearAllMocks()
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
     clearStoredSession()
     setStoredSession(adminSession)
     await router.push('/orders')

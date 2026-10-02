@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   Avatar,
-  Bell,
   Close,
   DataLine,
   FullScreen,
@@ -67,6 +66,7 @@ const ROUTE_TITLES: Record<string, string> = {
 
 interface VisitedTab {
   name: string
+  key: string
   path: string
   title: string
 }
@@ -76,7 +76,17 @@ const TABS_KEY = 'uav-console-tabs'
 const readTabs = (): VisitedTab[] => {
   try {
     const raw = window.localStorage.getItem(TABS_KEY)
-    return raw ? (JSON.parse(raw) as VisitedTab[]) : []
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((tab) => tab && typeof tab.name === 'string' && ROUTE_TITLES[tab.name] &&
+      typeof tab.path === 'string' && tab.path.startsWith('/') && !tab.path.startsWith('//') &&
+      router.resolve(tab.path).name === tab.name).map((tab) => ({
+        name: tab.name, path: tab.path, title: ['order-detail', 'order-supervise', 'user-detail', 'pilot-detail'].includes(tab.name)
+          ? `${ROUTE_TITLES[tab.name]} · ${router.resolve(tab.path).params.orderNum ?? router.resolve(tab.path).params.id}`
+          : ROUTE_TITLES[tab.name]!,
+        key: ['order-detail', 'order-supervise', 'user-detail', 'pilot-detail'].includes(tab.name)
+          ? `${tab.name}:${router.resolve(tab.path).path}` : tab.name,
+      }))
   } catch {
     return []
   }
@@ -88,18 +98,23 @@ const persistTabs = () => {
   window.localStorage.setItem(TABS_KEY, JSON.stringify(visitedTabs.value))
 }
 
-const activeTabName = computed(() => String(route.name ?? ''))
+const detailRoutes = ['order-detail', 'order-supervise', 'user-detail', 'pilot-detail']
+const activeTabName = computed(() => detailRoutes.includes(String(route.name))
+  ? `${String(route.name)}:${route.path}` : String(route.name ?? ''))
 
 const recordTab = () => {
   const name = String(route.name ?? '')
-  const title = ROUTE_TITLES[name]
+  const baseTitle = ROUTE_TITLES[name]
+  const entity = route.params.orderNum ?? route.params.id
+  const title = baseTitle && detailRoutes.includes(name) ? `${baseTitle} · ${entity}` : baseTitle
+  const key = activeTabName.value
   if (!title) return
   const path = route.fullPath
-  const existing = visitedTabs.value.find((tab) => tab.name === name)
+  const existing = visitedTabs.value.find((tab) => tab.key === key)
   if (existing) {
     existing.path = path
   } else {
-    visitedTabs.value.push({ name, path, title })
+    visitedTabs.value.push({ name, key, path, title })
   }
   persistTabs()
 }
@@ -110,15 +125,19 @@ const openTab = (tab: VisitedTab) => {
   void router.push(tab.path).catch(() => undefined)
 }
 
-const closeTab = (name: string) => {
-  const index = visitedTabs.value.findIndex((tab) => tab.name === name)
+const closeTab = (key: string) => {
+  const index = visitedTabs.value.findIndex((tab) => tab.key === key)
   if (index === -1) return
-  const wasActive = name === activeTabName.value
+  const wasActive = key === activeTabName.value
   visitedTabs.value.splice(index, 1)
   persistTabs()
-  if (wasActive && visitedTabs.value.length > 0) {
-    const next = visitedTabs.value[Math.min(index, visitedTabs.value.length - 1)]
-    void router.push(next.path).catch(() => undefined)
+  if (wasActive) {
+    if (visitedTabs.value.length > 0) {
+      const next = visitedTabs.value[Math.min(index, visitedTabs.value.length - 1)]
+      void router.push(next.path).catch(() => undefined)
+    } else {
+      void router.push({ name: 'home' }).catch(() => undefined)
+    }
   }
 }
 
@@ -174,6 +193,9 @@ const handleMenuSelect = (index: string) => {
 
 const handleLogout = () => {
   logout()
+  // 退出登录清空已访问书签，避免下一个账号看到上一个账号访问过的页面（含订单号）
+  visitedTabs.value = []
+  window.localStorage.removeItem(TABS_KEY)
   void router.replace({ name: 'admin-login' })
 }
 </script>
@@ -209,7 +231,12 @@ const handleLogout = () => {
         active-text-color="#ffffff"
         @select="handleMenuSelect"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.route" :index="item.route">
+        <el-menu-item
+          v-for="item in menuItems"
+          :key="item.route"
+          :index="item.route"
+          :data-testid="`menu-${item.route}`"
+        >
           <el-icon><component :is="item.icon" /></el-icon>
           <template #title>{{ item.label }}</template>
         </el-menu-item>
@@ -257,13 +284,7 @@ const handleLogout = () => {
             </template>
           </el-input>
 
-          <el-tooltip content="通知">
-            <button class="icon-btn" type="button" aria-label="通知">
-              <el-badge is-dot>
-                <el-icon><Bell /></el-icon>
-              </el-badge>
-            </button>
-          </el-tooltip>
+
 
           <el-tooltip :content="isDark ? '切换亮色' : '切换深色'">
             <button class="icon-btn" type="button" :aria-label="isDark ? '切换亮色' : '切换深色'" @click="toggle">
@@ -290,19 +311,21 @@ const handleLogout = () => {
         <div class="tabsbar__scroll">
           <div
             v-for="tab in visitedTabs"
-            :key="tab.name"
+            :key="tab.key"
             class="tab"
-            :class="{ 'tab--active': tab.name === activeTabName }"
+            :class="{ 'tab--active': tab.key === activeTabName }"
             role="button"
             tabindex="0"
             @click="openTab(tab)"
+            @keydown.enter="openTab(tab)"
+            @keydown.space.prevent="openTab(tab)"
           >
             <span class="tab__title">{{ tab.title }}</span>
             <button
               class="tab__close"
               type="button"
               :aria-label="`关闭 ${tab.title}`"
-              @click.stop="closeTab(tab.name)"
+              @click.stop="closeTab(tab.key)"
             >
               <el-icon><Close /></el-icon>
             </button>

@@ -46,7 +46,7 @@ describe('主体详情路由（TASK-FRONTEND-004）', () => {
   it('详情页侧栏仍高亮所属一级菜单（用户 / 飞手）', async () => {
     setStoredSession(adminSession)
 
-    const assertActive = async (path: string, label: string) => {
+    const assertActive = async (path: string, testid: string) => {
       await router.push(path)
       const wrapper = mount(MainLayout, {
         props: { title: '主体详情' },
@@ -55,22 +55,19 @@ describe('主体详情路由（TASK-FRONTEND-004）', () => {
       cleanups.push(() => wrapper.unmount())
       await flushPromises()
 
-      const sideButtons = wrapper.findAll('aside button')
-      expect(sideButtons.find((item) => item.text().includes(label))!.classes()).toContain(
-        'menu-item-active',
-      )
-      const others = sideButtons.filter(
-        (item) =>
-          !item.text().includes(label) && item.text() !== '系统日志' && item.text() !== '退出登录',
-      )
+      const activeItem = wrapper.find(`[data-testid="${testid}"]`)
+      expect(activeItem.classes()).toContain('is-active')
+      const others = wrapper
+        .findAll('[data-testid^="menu-"]')
+        .filter((item) => item.attributes('data-testid') !== testid)
       for (const other of others) {
-        expect(other.classes()).not.toContain('menu-item-active')
+        expect(other.classes()).not.toContain('is-active')
       }
       wrapper.unmount()
       cleanups.pop()
     }
 
-    await assertActive('/users/7', '用户')
-    await assertActive('/pilots/11', '飞手')
+    await assertActive('/users/7', 'menu-users')
+    await assertActive('/pilots/11', 'menu-pilots')
   })
 })

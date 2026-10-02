@@ -13,10 +13,11 @@ import {
   User,
   WarningFilled,
 } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { forEachConcurrent } from '../utils/concurrency'
 import MainLayout from '../layouts/MainLayout.vue'
-import { getAdminComplaints } from '../api/modules/admin-query'
+import { getAdminComplaints, getAdminPilots } from '../api/modules/admin-query'
 import { scanInProgressTasks, scanOrders } from '../api/modules/admin-scan'
-import { getRegisteredRiders } from '../api/modules/rider'
 import { getOrderTrajectory } from '../api/modules/uav'
 import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../types/admin'
 import { formatClock, formatDateTime, formatDuration } from '../utils/date'
@@ -53,6 +54,11 @@ const COMPLAINT_REASON_LABELS: Record<string, string> = {
 const TELEMETRY_POLL_MS = 10_000
 
 const loading = ref(false)
+const loadError = ref('')
+const scanTruncated = ref(false)
+const todayTruncated = ref(false)
+const flyingTotal = ref<number>()
+let disposed = false
 const updatedAt = ref('--:--:--')
 const flyingCards = ref<FlyingCard[] | undefined>(undefined)
 const todayOrders = ref<AdminOrderVo[] | undefined>(undefined)
@@ -66,16 +72,6 @@ const go = (to: RouteLocationRaw) => {
   void router.push(to).catch(() => undefined)
 }
 
-const flyingRiders = computed(() => {
-  const names = new Set<string>()
-  for (const card of flyingCards.value ?? []) {
-    if (card.task.riderName) {
-      names.add(card.task.riderName)
-    }
-  }
-  return names.size
-})
-
 const metricIcons: Record<string, Component> = {
   flying: Promotion,
   today: Tickets,
@@ -83,28 +79,18 @@ const metricIcons: Record<string, Component> = {
   pilot: User,
 }
 
-// 趋势方向：接入历史统计接口后填充 up/down（当前无历史数据，默认 flat 中性）
-const metricTrends: Record<string, 'up' | 'down' | 'flat'> = {
-  flying: 'flat',
-  today: 'flat',
-  dispute: 'flat',
-  pilot: 'flat',
-}
-
-const TREND_ARROWS: Record<string, string> = { up: '↑', down: '↓', flat: '—' }
-
 const metrics = computed(() => [
   {
     key: 'flying',
     label: '正在飞行',
-    value: flyingCards.value ? String(flyingCards.value.length) : '—',
+    value: flyingCards.value ? String(flyingTotal.value ?? flyingCards.value.length) : '—',
     hint: '执行中任务',
     to: { name: 'orders', query: { status: 'in_progress' } } satisfies RouteLocationRaw,
   },
   {
     key: 'today',
     label: '今日订单',
-    value: todayOrders.value ? String(todayOrders.value.length) : '—',
+    value: todayOrders.value ? `${todayTruncated.value ? '至少 ' : ''}${todayOrders.value.length}` : '—',
     hint: '今日新建',
     to: { name: 'orders', query: { date: 'today' } } satisfies RouteLocationRaw,
   },
@@ -117,9 +103,9 @@ const metrics = computed(() => [
   },
   {
     key: 'pilot',
-    label: '在线飞手',
-    value: `${flyingRiders.value}/${registeredRiders.value ?? '—'}`,
-    hint: '在飞 / 在册',
+    label: '在册飞手',
+    value: String(registeredRiders.value ?? '—'),
+    hint: '注册飞手总数',
     to: { name: 'pilots' } satisfies RouteLocationRaw,
   },
 ])
@@ -153,7 +139,7 @@ const todos = computed<TodoItem[]>(() => {
     const example = overdueWaiting.value?.example
     items.push({
       key: 'overdue',
-      title: `${overdueWaiting.value?.total} 单待验收超 24 小时`,
+      title: `${overdueWaiting.value?.total} 单创建超 24 小时且待验收`,
       detail: example?.orderNum
         ? `例 ${example.orderNum} · 创建于 ${example.createTime ?? '—'}`
         : '创建超 24 小时仍未确认完成',
@@ -180,27 +166,28 @@ const telemetrySummary = (card: FlyingCard) => {
     telemetry.speed != null ? `速度 ${telemetry.speed.toFixed(1)} m/s` : '',
     telemetry.battery != null ? `电量 ${telemetry.battery}%` : '',
     telemetry.startedAt ? `已飞 ${formatDuration(Date.now() - telemetry.startedAt)}` : '',
+    telemetry.reportedAt ? `上报 ${formatClock(new Date(telemetry.reportedAt))}` : '',
   ].filter(Boolean)
   return parts.length > 0 ? parts.join(' · ') : '等待设备上报'
 }
 
 /** 拉取全部飞行卡的轨迹并截取首尾点位 → 遥测摘要 */
-const refreshTelemetry = async () => {
-  await Promise.all(
-    (flyingCards.value ?? []).map(async (card) => {
-      const orderNum = card.task.orderNum
-      if (!orderNum) {
-        card.telemetry = undefined
-        return
-      }
-      try {
-        const points = await getOrderTrajectory(orderNum)
-        card.telemetry = summarizeTrajectory(points)
-      } catch {
-        card.telemetry = undefined
-      }
-    }),
-  )
+let telemetryInFlight: Promise<void> | undefined
+const refreshTelemetry = (): Promise<void> => {
+  if (telemetryInFlight) return telemetryInFlight
+  const cards = flyingCards.value ?? []
+  telemetryInFlight = forEachConcurrent(cards, 4, async (card) => {
+    if (disposed) return
+    const orderNum = card.task.orderNum
+    if (!orderNum) return
+    try {
+      const points = await getOrderTrajectory(orderNum)
+      if (!disposed && flyingCards.value === cards) card.telemetry = summarizeTrajectory(points)
+    } catch {
+      if (!disposed && flyingCards.value === cards) card.telemetry = undefined
+    }
+  }).finally(() => { telemetryInFlight = undefined })
+  return telemetryInFlight
 }
 
 let telemetryTimer: ReturnType<typeof setInterval> | undefined
@@ -221,12 +208,14 @@ const startPolling = () => {
   }
 }
 
-onBeforeUnmount(stopPolling)
+onBeforeUnmount(() => { disposed = true; loadSeq += 1; stopPolling() })
 
 let loadSeq = 0
 const load = async () => {
   const seq = ++loadSeq
   loading.value = true
+  loadError.value = ''
+  stopPolling()
   try {
     const midnight = new Date()
     midnight.setHours(0, 0, 0, 0)
@@ -237,22 +226,25 @@ const load = async () => {
       scanOrders({ cutoff: formatDateTime(midnight), pageSize: 100, maxPages: 5 }),
       // 以下三项失败不阻断看板：对应指标显示「—」或折叠待办
       getAdminComplaints({ page: 0, size: 10, status: 'PENDING' }).catch(() => null),
-      getRegisteredRiders().catch(() => null),
+      getAdminPilots({ page: 0, size: 1 }).catch(() => null),
       scanOrders({ status: '5', cutoff: overdueCutoff, pageSize: 100, maxPages: 5 }).catch(
         () => null,
       ),
     ])
     if (seq !== loadSeq) return
 
-    flyingCards.value = inProgress
+    flyingCards.value = inProgress.rows
       .filter((task) => task.taskStatus === 'IN_PROGRESS')
       .map((task) => ({ task }))
+    flyingTotal.value = inProgress.totalElements
+    todayTruncated.value = todayScan.truncated
+    scanTruncated.value = inProgress.truncated || todayScan.truncated
     todayOrders.value = todayScan.rows
     pendingComplaints.value = complaints?.complaints ?? []
     pendingComplaintTotal.value = complaints
       ? complaints.totalElements ?? pendingComplaints.value.length
       : undefined
-    registeredRiders.value = riders?.length
+    registeredRiders.value = riders?.totalElements
     overdueWaiting.value = waitingScan
       ? waitingScan.truncated
         ? undefined
@@ -265,14 +257,15 @@ const load = async () => {
     await refreshTelemetry()
     if (seq !== loadSeq) return
     startPolling()
+    updatedAt.value = formatClock()
   } catch (err) {
     if (seq === loadSeq) {
-      console.error(err)
+      loadError.value = err instanceof Error ? err.message : '加载首页失败'
+      ElMessage.error(loadError.value)
     }
   } finally {
     if (seq === loadSeq) {
       loading.value = false
-      updatedAt.value = formatClock()
     }
   }
 }
@@ -286,7 +279,7 @@ const openOrderDetail = (orderNum?: string) => {
   go({ name: 'order-detail', params: { orderNum } })
 }
 
-const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
+const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toFixed(2)}`)
 </script>
 
 <template>
@@ -301,6 +294,8 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
         </el-button>
       </div>
 
+      <el-alert v-if="loadError" :title="loadError + '，请点击刷新重试。已有数据可能已过期。'" type="error" :closable="false" />
+      <el-alert v-if="scanTruncated" title="部分数据未加载完整，今日订单显示已加载数量，飞行列表仅展示部分任务。" type="warning" :closable="false" />
       <!-- 指标卡 -->
       <div class="stat-grid">
         <button
@@ -308,6 +303,7 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
           :key="metric.key"
           type="button"
           class="kpi"
+          :data-testid="`metric-${metric.key}`"
           @click="go(metric.to)"
         >
           <div class="kpi__top">
@@ -317,12 +313,7 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
             <span class="kpi__label">{{ metric.label }}</span>
           </div>
           <div class="kpi__value tabular-nums">{{ metric.value }}</div>
-          <div class="kpi__meta">
-            <span>{{ metric.hint }}</span>
-            <span class="kpi__trend" :class="`kpi__trend--${metricTrends[metric.key]}`">
-              {{ TREND_ARROWS[metricTrends[metric.key]] }} 较昨日
-            </span>
-          </div>
+          <div class="kpi__meta">{{ metric.hint }}</div>
         </button>
       </div>
 
@@ -340,7 +331,7 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
             </el-tag>
           </div>
 
-          <el-table v-if="flyingCards?.length" :data="flyingCards" size="small">
+          <el-table v-if="flyingCards?.length" :data="flyingCards" size="small" data-testid="flying-table">
             <el-table-column label="订单" min-width="150">
               <template #default="{ row }">
                 <div class="order-cell">
@@ -410,12 +401,12 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
             </el-table-column>
           </el-table>
 
-          <div v-else-if="!loading" class="map-placeholder">
+          <div v-else-if="!loading && !loadError" class="map-placeholder">
             <div class="map-placeholder__grid"></div>
             <div class="map-placeholder__center">
               <span class="map-placeholder__icon"><el-icon><Position /></el-icon></span>
-              <span class="map-placeholder__title">地图轨迹区域</span>
-              <span class="map-placeholder__desc">接入高德 / 百度地图后，在此展示无人机实时轨迹</span>
+              <span class="map-placeholder__title">当前无飞行作业</span>
+              <span class="map-placeholder__desc">可前往订单列表查看任务与履约记录</span>
               <el-button type="primary" plain size="small" @click="go({ name: 'orders' })">
                 查看全部订单
               </el-button>
@@ -473,7 +464,7 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
             <el-icon class="ml-1"><ArrowRight /></el-icon>
           </button>
         </div>
-        <el-table :data="todayTop5" size="small" @row-click="(row: AdminOrderVo) => openOrderDetail(row.orderNum)">
+        <el-table :data="todayTop5" size="small" data-testid="today-table" @row-click="(row: AdminOrderVo) => openOrderDetail(row.orderNum)">
           <el-table-column prop="orderNum" label="订单号" min-width="150" />
           <el-table-column prop="ownerName" label="用户" min-width="90" />
           <el-table-column label="状态" width="120">
@@ -583,14 +574,6 @@ const formatAmount = (value?: number) => `¥${Number(value ?? 0).toFixed(2)}`
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
-
-.kpi__trend {
-  color: var(--text-faint);
-}
-
-.kpi__trend--up { color: var(--success); font-weight: 600; }
-.kpi__trend--down { color: var(--danger); font-weight: 600; }
-.kpi__trend--flat { color: var(--text-faint); }
 
 /* ---------- 面板通用 ---------- */
 .panel {
