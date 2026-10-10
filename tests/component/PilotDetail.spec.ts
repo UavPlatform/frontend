@@ -31,6 +31,12 @@ const detailFixture: AdminPilotDetailVo = {
   role: 1,
   status: 1,
   completedCount: 12,
+  idNumberMasked: '330***********1234',
+  idExpiryDate: '2025-05-01',
+  idExpired: true,
+  qualifications: [
+    { id: 2, aircraftModelId: 1, modelCode: 'FC30', modelName: 'DJI FlyCart 30', licenseGrade: 'BVLOS', licenseGradeLabel: '超视距' },
+  ],
   drones: [
     { djiId: 'SMOKE-01', aircraftModelId: 1, modelName: 'M350 RTK', online: true, available: true },
     { djiId: 'SMOKE-02', aircraftModelId: 2, modelName: 'M30', online: false, available: false },
@@ -110,6 +116,24 @@ describe('飞手详情：绑定无人机与合规开关（TASK-FRONTEND-004）',
     expect(text).toContain('未映射')
     expect(text).toContain('3 架（在线 1 架）')
     expect(text).toContain('累计完成 12 单')
+  })
+
+  it('展示脱敏身份证号、证件过期标记与驾驶资质', async () => {
+    const wrapper = await mountDetail()
+    expect(wrapper.get('[data-testid="pilot-id-number"]').text()).toBe('330***********1234')
+    expect(wrapper.find('[data-testid="pilot-id-expired"]').exists()).toBe(true)
+    const quals = wrapper.get('[data-testid="pilot-qualifications"]').text()
+    expect(quals).toContain('DJI FlyCart 30')
+    expect(quals).toContain('FC30')
+    expect(quals).toContain('超视距')
+  })
+
+  it('未登记实名与资质时给出空状态，不显示过期', async () => {
+    getAdminPilotDetail.mockResolvedValue({ ...detailFixture, idNumberMasked: null, idExpiryDate: null, idExpired: false, qualifications: [] })
+    const wrapper = await mountDetail()
+    expect(wrapper.get('[data-testid="pilot-id-number"]').text()).toBe('未登记')
+    expect(wrapper.find('[data-testid="pilot-id-expired"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="pilot-qualifications"]').text()).toContain('该飞手尚未登记驾驶资质')
   })
 
   it('available=null 的设备：开关禁用并提示未注册，点击不发请求', async () => {

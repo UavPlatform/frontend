@@ -701,26 +701,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/info/edit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 编辑本人资料
-         * @description 飞手编辑个人资料；当前为占位实现，仅返回成功
-         */
-        post: operations["editSelfInfo"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/live/close": {
         parameters: {
             query?: never;
@@ -947,9 +927,89 @@ export interface paths {
         };
         /**
          * 订单列表
-         * @description 获取当前用户的所有订单，按创建时间倒序
+         * @description 获取当前用户的所有订单（App「我的交易 - 我买到的」），按创建时间倒序
          */
         get: operations["listOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order/pending-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 待评价
+         * @description 我已完成的、尚未提交评价的订单，按创建时间倒序
+         */
+        get: operations["listPendingReviewOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order/sold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我卖出的
+         * @description 被用户选定的应征属于我的订单（成交指针 selected_application_id），按创建时间倒序
+         */
+        get: operations["listSoldOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的交易统计
+         * @description App 个人中心各入口的计数：累计订单数、已完成交易数、我发布的、我买到的、我卖出的、待评价。累计订单与我买到的按买家视角，我卖出的按被选定应征的飞手视角；已完成交易数仅统计订单状态为「已完成」的订单（待验收/争议中/已退款均不计）
+         */
+        get: operations["getTradeStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的交易
+         * @description 我买到的与我卖出的合并列表，按创建时间倒序
+         */
+        get: operations["listMyTrades"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1190,6 +1250,30 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/rider/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查看本人资料
+         * @description 飞手查看本人资料、证件有效期（身份证号脱敏）与驾驶资质（机型 × 执照等级）；从未保存资料时除用户名外均为空
+         */
+        get: operations["getInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 编辑本人资料
+         * @description 局部更新：字段为 null 不修改。身份证号校验格式与校验位；证件有效期不得早于今天；qualifications 传数组时按机型做集合差异（缺失删除、新机型新增、等级变化更新，[] 清空），机型须为启用机型（否则 AIRCRAFT_MODEL_NOT_FOUND）。参数错误 400 INVALID_PARAM
+         */
+        patch: operations["editInfo"];
         trace?: never;
     };
     "/rider/my-tasks": {
@@ -2086,8 +2170,19 @@ export interface components {
             completedCount?: number;
             /** @description 绑定无人机表（无绑定为空数组） */
             drones?: components["schemas"]["AdminPilotDroneVo"][];
+            /** @description 证件是否已过期（有效期早于今天）；未登记有效期为 false */
+            idExpired?: boolean;
+            /**
+             * Format: date
+             * @description 证件有效期截止日；未登记为 null
+             */
+            idExpiryDate?: string;
+            /** @description 脱敏身份证号（前 3 后 4）；未登记为 null */
+            idNumberMasked?: string;
             /** @description 关联订单（按创建时间倒序，无订单为空数组） */
             orders?: components["schemas"]["AdminOrderVo"][];
+            /** @description 驾驶资质（机型 × 执照等级；无资质为空数组） */
+            qualifications?: components["schemas"]["RiderQualificationVO"][];
             /**
              * Format: int32
              * @description 角色（恒为 1 飞手）
@@ -3078,6 +3173,22 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultRiderInfoVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["RiderInfoVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultRiderStatsVO: {
             /**
              * Format: int32
@@ -3182,6 +3293,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["TokenRefreshVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultTradeStatsVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["TradeStatsVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -3331,7 +3458,117 @@ export interface components {
             aircraftModelId?: number;
             taskNum?: string;
         };
-        RiderInfoDto: unknown;
+        /** @description 飞手资料局部更新（字段为 null 表示不修改） */
+        RiderInfoDto: {
+            /**
+             * Format: int32
+             * @description 年龄（16~100）
+             * @example 30
+             */
+            age?: number;
+            /**
+             * Format: date
+             * @description 证件有效期截止日（yyyy-MM-dd，不得早于今天）
+             * @example 2036-01-01
+             */
+            idExpiryDate?: string;
+            /**
+             * @description 居民身份证号（18 位，末位可为 X；服务端校验格式与校验码，返回时一律脱敏）
+             * @example 11010519491231002X
+             */
+            idNumber?: string;
+            /**
+             * @description 所在地
+             * @example 广东省深圳市
+             */
+            location?: string;
+            /** @description 驾驶资质全集（null 不修改；[] 清空）；同一机型只能出现一次 */
+            qualifications?: components["schemas"]["RiderQualificationDto"][];
+            /**
+             * @description 自我介绍
+             * @example 五年吊运作业经验
+             */
+            selfIntroduction?: string;
+        };
+        /** @description 飞手资料（身份证号脱敏） */
+        RiderInfoVO: {
+            /**
+             * Format: int32
+             * @description 年龄；未填为 null
+             */
+            age?: number;
+            /**
+             * Format: date-time
+             * @description 资料创建时间；从未保存资料为 null
+             */
+            createTime?: string;
+            /** @description 证件是否已过期（有效期早于今天）；未填有效期为 false */
+            idExpired?: boolean;
+            /**
+             * Format: date
+             * @description 证件有效期截止日；未填为 null
+             */
+            idExpiryDate?: string;
+            /** @description 脱敏身份证号（前 3 后 4，如 110***********002X）；未填为 null */
+            idNumberMasked?: string;
+            /** @description 所在地 */
+            location?: string;
+            /** @description 驾驶资质（无资质为空数组） */
+            qualifications?: components["schemas"]["RiderQualificationVO"][];
+            /** @description 自我介绍 */
+            selfIntroduction?: string;
+            /**
+             * Format: date-time
+             * @description 资料最近更新时间；从未保存资料为 null
+             */
+            updateTime?: string;
+            /**
+             * Format: int64
+             * @description 飞手ID（user.id）
+             */
+            userId?: number;
+            /** @description 用户名（昵称） */
+            userName?: string;
+        };
+        /** @description 驾驶资质条目：机型（取自 /api/aircraft-models）× 执照等级 */
+        RiderQualificationDto: {
+            /**
+             * Format: int64
+             * @description 机型ID（aircraft_model.id，须为启用机型）
+             * @example 1
+             */
+            aircraftModelId: number;
+            /**
+             * @description 执照等级：VLOS 视距内 / BVLOS 超视距 / TEACHER 教员
+             * @example VLOS
+             * @enum {string}
+             */
+            licenseGrade: "BVLOS" | "TEACHER" | "VLOS";
+        };
+        /** @description 飞手驾驶资质（机型 × 执照等级） */
+        RiderQualificationVO: {
+            /**
+             * Format: int64
+             * @description 机型ID（aircraft_model.id）
+             */
+            aircraftModelId?: number;
+            /**
+             * Format: int64
+             * @description 资质ID
+             */
+            id?: number;
+            /**
+             * @description 执照等级枚举名
+             * @enum {string}
+             */
+            licenseGrade?: "BVLOS" | "TEACHER" | "VLOS";
+            /** @description 执照等级中文名（视距内/超视距/教员） */
+            licenseGradeLabel?: string;
+            /** @description 型号编码（如 FC30）；机型缺失时为 null */
+            modelCode?: string;
+            /** @description 机型显示名（如 DJI FlyCart 30）；机型缺失时为 null */
+            modelName?: string;
+        };
         /** @description 飞手注册参数 */
         RiderRegisterDto: {
             /**
@@ -3492,7 +3729,7 @@ export interface components {
         };
         TaskDto: {
             /** @enum {string} */
-            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "EQUIPMENT";
+            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "DAILY_SUPPLIES" | "EQUIPMENT" | "FURNITURE";
             cargoWeightKg?: number;
             description?: string;
             /** Format: double */
@@ -3521,7 +3758,7 @@ export interface components {
             aircraftModelId?: number;
             aircraftModelName?: string;
             /** @enum {string} */
-            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "EQUIPMENT";
+            cargoCategory?: "AGRICULTURAL" | "CONSTRUCTION" | "DAILY_SUPPLIES" | "EQUIPMENT" | "FURNITURE";
             cargoWeightKg?: number;
             completeNote?: string;
             /** Format: date-time */
@@ -3564,6 +3801,20 @@ export interface components {
         };
         TokenRefreshVO: {
             token?: string;
+        };
+        TradeStatsVO: {
+            /** Format: int64 */
+            boughtOrderCount?: number;
+            /** Format: int64 */
+            completedTradeCount?: number;
+            /** Format: int64 */
+            pendingReviewCount?: number;
+            /** Format: int64 */
+            publishedTaskCount?: number;
+            /** Format: int64 */
+            soldOrderCount?: number;
+            /** Format: int64 */
+            totalOrderCount?: number;
         };
         Uav: {
             controllerModel?: string;
@@ -4647,30 +4898,6 @@ export interface operations {
             };
         };
     };
-    editSelfInfo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RiderInfoDto"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultVoid"];
-                };
-            };
-        };
-    };
     closeLive: {
         parameters: {
             query: {
@@ -5020,8 +5247,111 @@ export interface operations {
     listOrders: {
         parameters: {
             query?: {
-                page?: number;
+                /** @description 每页条数 */
                 size?: number;
+                /** @description 订单状态过滤（枚举名如 COMPLETED，或状态码如 4），不传为全部 */
+                status?: string;
+                /** @description 页码，从 0 开始 */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultOrderListVO"];
+                };
+            };
+        };
+    };
+    listPendingReviewOrders: {
+        parameters: {
+            query?: {
+                /** @description 每页条数 */
+                size?: number;
+                /** @description 页码，从 0 开始 */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultOrderListVO"];
+                };
+            };
+        };
+    };
+    listSoldOrders: {
+        parameters: {
+            query?: {
+                /** @description 每页条数 */
+                size?: number;
+                /** @description 订单状态过滤（枚举名如 COMPLETED，或状态码如 4），不传为全部 */
+                status?: string;
+                /** @description 页码，从 0 开始 */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultOrderListVO"];
+                };
+            };
+        };
+    };
+    getTradeStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultTradeStatsVO"];
+                };
+            };
+        };
+    };
+    listMyTrades: {
+        parameters: {
+            query?: {
+                /** @description 每页条数 */
+                size?: number;
+                /** @description 订单状态过滤（枚举名如 COMPLETED，或状态码如 4），不传为全部 */
+                status?: string;
+                /** @description 页码，从 0 开始 */
+                page?: number;
             };
             header?: never;
             path?: never;
@@ -5320,6 +5650,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    getInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultRiderInfoVO"];
+                };
+            };
+        };
+    };
+    editInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiderInfoDto"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultRiderInfoVO"];
                 };
             };
         };
