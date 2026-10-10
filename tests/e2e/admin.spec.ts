@@ -51,6 +51,18 @@ test('管理员登录进入可用首页，隐藏未完成入口', async ({ page 
   await expect(page.getByRole('button', { name: '通知', exact: true })).toHaveCount(0)
 })
 
+test('密码框按回车即可登录（表单原生提交，只发一次登录请求）', async ({ page }) => {
+  await api(page)
+  let loginCalls = 0
+  page.on('request', (req) => { if (new URL(req.url()).pathname === '/api/admin/login') loginCalls++ })
+  await page.goto('/admin/login')
+  await page.getByPlaceholder('请输入管理员账号').fill('admin')
+  await page.getByPlaceholder('请输入管理员密码').fill('password')
+  await page.getByPlaceholder('请输入管理员密码').press('Enter')
+  await expect(page).toHaveURL('http://127.0.0.1:4173/')
+  expect(loginCalls).toBe(1)
+})
+
 test('订单直达链接登录后恢复，取消退款不提交，确认后刷新状态', async ({ page }) => {
   const writes = await api(page)
   await page.goto('/orders/ORD-A')

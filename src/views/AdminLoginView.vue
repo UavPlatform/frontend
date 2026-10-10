@@ -89,7 +89,7 @@ const handleLogin = async () => {
             class="!h-12 w-full"
             type="primary"
             :loading="loginLoading"
-            @click="handleLogin"
+            native-type="submit"
           >
             进入管理中心
           </el-button>
