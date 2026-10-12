@@ -1405,7 +1405,7 @@ export interface paths {
         };
         /**
          * 任务详情
-         * @description 飞手查看任意任务的详细信息（无需任务归属），含撮合状态、货物字段与订单/报价回显
+         * @description 飞手查看任意任务的详细信息（无需任务归属），含撮合状态与货物字段；报价与机型只回显本人应征，订单号/成交价/约定时间/接单飞手仅在本人即选定飞手时回显，选定前对所有飞手不回显（见 TaskVo.quotedAmount）
          */
         get: operations["getTaskDetail_1"];
         put?: never;
@@ -1542,7 +1542,7 @@ export interface paths {
         };
         /**
          * 应征列表
-         * @description 任务属主、应征飞手与管理员（role=2，监管端只读）按任务编号查询飞手应征列表：飞手、机型、载重、系统报价 quotedAmount、应征时间、状态（非属主非应征的普通用户 403）
+         * @description 任务属主、应征飞手与管理员（role=2，监管端只读）按任务编号查询飞手应征列表：飞手、机型、载重、系统报价 quotedAmount、应征时间、状态。可见范围：任务属主与管理员返回全部应征；飞手只返回本人的应征（不含竞争飞手的身份、机型与报价，仅有接单记录而无应征时为空列表）；非属主非应征的普通用户 403
          */
         get: operations["listApplications"];
         put?: never;
@@ -3773,6 +3773,7 @@ export interface components {
             modelCode?: string;
             orderNum?: string;
             orderStatus?: string;
+            /** @description 系统报价（ADR-0003 平台计价，不可改价）。用户端/管理端：选定应征的报价，等于成交价 totalAmount，未选定时为 null。飞手端（/rider/task/detail、/rider/my-tasks、/rider/my-tasks/history、/rider/confirm-order）：始终是当前飞手本人应征的报价，未应征时为 null，从不返回其他飞手的报价；订单号/成交价/约定时间仅当当前飞手即选定飞手时回显（选定前对所有飞手为 null），若选定的是其他飞手则接单飞手也不回显 */
             quotedAmount?: number;
             /** Format: date-time */
             riderConfirmedAt?: string;
@@ -3789,6 +3790,7 @@ export interface components {
             taskTime?: string;
             /** @enum {string} */
             taskType?: "AERIAL_PHOTO" | "MONITORING" | "SURVEY" | "TRANSPORT";
+            /** @description 成交价（订单锁定金额 = 选定应征的 quotedAmount）。飞手端仅在当前飞手即选定飞手时回显，否则为 null */
             totalAmount?: number;
             totalDistance?: number;
             /** Format: date-time */
