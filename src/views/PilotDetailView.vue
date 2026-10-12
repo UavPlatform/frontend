@@ -10,7 +10,8 @@ import type { AdminPilotDetailVo, AdminPilotDroneVo } from '../types/admin'
 
 /**
  * 飞手详情（REQ-FRONTEND-001 §4.2、ADR-0004）：
- * 绑定无人机表（djiId / 机型 / 在线 / 可用）+ 启停开关（POST /admin/uav/available）+ 关联订单。
+ * 实名信息（身份证脱敏/有效期）+ 驾驶资质 + 绑定无人机表（djiId / 机型 / 在线 / 可用）
+ * + 启停开关（POST /admin/uav/available）+ 关联订单。
  * 无人机不设一级菜单：归属与合规开关只在这里维护。
  */
 const route = useRoute()
@@ -61,6 +62,7 @@ const backToList = () => {
 }
 
 const drones = computed(() => detail.value?.drones ?? [])
+const qualifications = computed(() => detail.value?.qualifications ?? [])
 
 /** available=null（设备档案未注册）→ 开关禁用 + 提示，不发请求 */
 const unregisteredCount = computed(
@@ -145,7 +147,45 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
           <el-descriptions-item label="绑定无人机">
             {{ drones.length }} 架（在线 {{ drones.filter((d) => d.online).length }} 架）
           </el-descriptions-item>
+          <el-descriptions-item label="身份证号">
+            <span data-testid="pilot-id-number">{{ detail.idNumberMasked || '未登记' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="证件有效期">
+            <span>{{ detail.idExpiryDate || '未登记' }}</span>
+            <el-tag
+              v-if="detail.idExpired"
+              class="ml-2"
+              type="danger"
+              size="small"
+              effect="plain"
+              data-testid="pilot-id-expired"
+            >
+              已过期
+            </el-tag>
+          </el-descriptions-item>
         </el-descriptions>
+      </section>
+
+      <!-- 驾驶资质（机型 × 执照等级，飞手在 App「飞手资料」中维护） -->
+      <section v-if="detail" class="panel-card p-5" data-testid="pilot-qualifications">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <div class="section-title">驾驶资质</div>
+          <div class="text-xs text-[var(--text-secondary)]">共 {{ qualifications.length }} 项</div>
+        </div>
+        <el-table v-if="qualifications.length" class="mt-3" :data="qualifications" border>
+          <el-table-column label="机型" min-width="180">
+            <template #default="{ row }">{{ row.modelName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="型号代码" min-width="120">
+            <template #default="{ row }">{{ row.modelCode || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="执照等级" min-width="120">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.licenseGradeLabel || row.licenseGrade || '—' }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else description="该飞手尚未登记驾驶资质" :image-size="60" />
       </section>
 
       <!-- 绑定无人机（ADR-0004：无人机不设一级菜单，启停只在此处） -->
