@@ -40,7 +40,7 @@ CI 可依次执行 `pnpm install --frozen-lockfile`、`pnpm run check`、`pnpm e
 
 ## OpenAPI 契约（消费侧）
 
-后端契约由 backend 仓导出（`backend/spec/openapi/drone-backend.openapi.json`），本仓 **vendor + sha256 对账 + 生成物入库**。
+后端契约由 backend 仓导出（`backend/spec/openapi/drone-backend.openapi.json`），本仓 **vendor + sha256 对账 + 生成物入库**。后端发布 `contract-*` Release 时，GitHub Actions 机器人自动开 PR 同步（见 docs 仓库 ADR）。
 
 ```
 openapi/drone-backend.openapi.json    # vendor 进来的规格（唯一事实源副本）
@@ -55,6 +55,8 @@ src/api/contract.ts                   # 契约类型门面：apiGet/apiPost/apiP
 | 只对账 sha256 | `pnpm run api:check` |
 | 契约/单测门禁 | `pnpm test`（含 `tests/unit/openapi-contract.spec.ts`） |
 | 类型门禁 | `pnpm run typecheck`（`pnpm run build` 已包含） |
+
+**契约同步**：后端仓在契约变化时发布 `contract-*` Release 并触发 `repository_dispatch`，`.github/workflows/contract-sync.yml` 自动下载、校验 sha256 并创建 PR。本地手动同步可运行 `pnpm run api`（默认从后端 Release 或 raw URL 拉取）。
 
 写调用点的固定动作：
 

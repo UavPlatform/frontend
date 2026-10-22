@@ -1,0 +1,168 @@
+name: OpenAPI Contract Sync
+
+on:
+  repository_dispatch:
+    types: [openapi-updated]
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch contract from backend Release
+        id: fetch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          
+          # 优先使用 repository_dispatch payload
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            TAG="${{ github.event.client_payload.tag }}"
+            EXPECTED_SHA256="${{ github.event.client_payload.sha256 }}"
+            ASSET_URL="${{ github.event.client_payload.asset_url }}"
+            echo "来源：repository_dispatch event"
+          else
+            echo "来源：schedule/workflow_dispatch，查询最新 contract-* Release"
+            
+            # 查询最新 contract-* Release
+            RELEASE_JSON=$(gh api repos/UavPlatform/backend/releases \
+              --jq '[.[] | select(.tag_name | startswith("contract-"))] | .[0]')
+            
+            if [ -z "$RELEASE_JSON" ] || [ "$RELEASE_JSON" = "null" ]; then
+              echo "未找到 contract-* Release，回退到 raw URL"
+              ASSET_URL="https://raw.githubusercontent.com/UavPlatform/backend/main/spec/openapi/drone-backend.openapi.json"
+              TAG="raw-fallback"
+              EXPECTED_SHA256=""
+            else
+              TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+              
+              # 查找 drone-backend.openapi.json 资产
+              ASSET_URL=$(echo "$RELEASE_JSON" | jq -r \
+                '.assets[] | select(.name == "drone-backend.openapi.json") | .browser_download_url')
+              
+              # 查找 .sha256 资产
+              SHA256_URL=$(echo "$RELEASE_JSON" | jq -r \
+                '.assets[] | select(.name | endswith(".sha256")) | .browser_download_url')
+              
+              if [ -n "$SHA256_URL" ]; then
+                EXPECTED_SHA256=$(curl -fsSL "$SHA256_URL" | awk '{print $1}')
+              else
+                EXPECTED_SHA256=""
+              fi
+            fi
+          fi
+          
+          echo "TAG=$TAG"
+          echo "ASSET_URL=$ASSET_URL"
+          echo "EXPECTED_SHA256=$EXPECTED_SHA256"
+          
+          # 下载契约文件
+          curl -fsSL "$ASSET_URL" -o /tmp/contract.json
+          
+          # 计算实际 sha256
+          ACTUAL_SHA256=$(sha256sum /tmp/contract.json | awk '{print $1}')
+          echo "ACTUAL_SHA256=$ACTUAL_SHA256"
+          
+          # 校验 sha256（如果有预期值）
+          if [ -n "$EXPECTED_SHA256" ] && [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
+            echo "❌ SHA256 校验失败！"
+            echo "预期：$EXPECTED_SHA256"
+            echo "实际：$ACTUAL_SHA256"
+            exit 1
+          fi
+          
+          # 导出环境变量供后续步骤使用
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL_SHA256" >> "$GITHUB_OUTPUT"
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Sync contract and generate types
+        env:
+          OPENAPI_SOURCE: /tmp/contract.json
+        run: |
+          pnpm run api:sync
+          pnpm run api:gen
+          pnpm run api:check
+
+      - name: Run type check
+        run: pnpm run typecheck
+
+      - name: Generate GitHub App token
+        id: app-token
+        if: vars.CONTRACT_BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.CONTRACT_BOT_APP_ID }}
+          private-key: ${{ secrets.CONTRACT_BOT_PRIVATE_KEY }}
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          commit-message: 'chore(openapi): sync contract from ${{ steps.fetch.outputs.tag }}'
+          branch: bot/openapi-sync
+          delete-branch: true
+          title: 'chore(openapi): sync contract from ${{ steps.fetch.outputs.tag }}'
+          body: |
+            🤖 自动同步后端 OpenAPI 契约
+            
+            **契约来源**
+            - Release Tag: `${{ steps.fetch.outputs.tag }}`
+            - SHA256: `${{ steps.fetch.outputs.sha256 }}`
+            - Asset URL: ${{ steps.fetch.outputs.asset_url }}
+            
+            **变更内容**
+            - 更新 `openapi/drone-backend.openapi.json`
+            - 更新 `openapi/drone-backend.openapi.sha256`
+            - 重新生成 `src/api/generated/openapi.d.ts`
+            
+            ---
+            _由 [contract-sync workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) 自动创建_
+
+      - name: Add workflow summary
+        run: |
+          echo "## OpenAPI Contract Sync 结果" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release Tag**: \`${{ steps.fetch.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **SHA256**: \`${{ steps.fetch.outputs.sha256 }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          
+          if [ "${{ steps.cpr.outputs.pull-request-operation }}" = "created" ]; then
+            echo "✅ 已创建 PR: ${{ steps.cpr.outputs.pull-request-url }}" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.cpr.outputs.pull-request-operation }}" = "updated" ]; then
+            echo "✅ 已更新 PR: ${{ steps.cpr.outputs.pull-request-url }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ℹ️ 无需更新（契约未变化）" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          
+          if [ -z "${{ steps.app-token.outputs.token }}" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠️ **注意**: 使用了 GITHUB_TOKEN，PR 不会自动触发 CI" >> "$GITHUB_STEP_SUMMARY"
+            echo "   配置 \`CONTRACT_BOT_APP_ID\` 和 \`CONTRACT_BOT_PRIVATE_KEY\` secrets 以启用 GitHub App token" >> "$GITHUB_STEP_SUMMARY"
+          fi
