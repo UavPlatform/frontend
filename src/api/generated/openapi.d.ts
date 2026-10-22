@@ -712,7 +712,7 @@ export interface paths {
         put?: never;
         /**
          * 结束观看并请求停止推流（1A-5a）
-         * @description 运营端结束观看语义：先补齐当前用户观看记录 end_time；若设备在线且直播在运行，则向设备下发 STOP_LIVE 命令（复用 START_LIVE 的 ACK/超时模式），确认后结束直播会话并补齐该设备全体观众的观看记录；设备离线则直接补终态。协议详见 DroneWebSocketHandler#sendStopLiveCommand javadoc。
+         * @description 运营端结束观看语义：先补齐当前用户观看记录 end_time；若设备在线且直播在运行，则向设备下发 STOP_LIVE 命令（复用 START_LIVE 的 ACK/超时模式），确认后结束直播会话并补齐该设备全体观众的观看记录；设备离线则直接补终态。协议详见 DroneCommandService#sendStopLiveCommand javadoc。
          */
         post: operations["closeLive"];
         delete?: never;
@@ -1602,11 +1602,31 @@ export interface paths {
         };
         /**
          * 附件列表
-         * @description 任务所有者、接单飞手与管理员（role=2，监管端只读）可看；逐条附 presigned 下载 URL（15 分钟有效）
+         * @description 任务所有者、接单飞手与管理员（role=2，监管端只读）可看；仅返回已确认或核验通过的历史附件（uploadStatus=UPLOADED），校验对象存在且大小一致后附下载 URL
          */
         get: operations["list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{taskNum}/attachments/confirm-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认附件上传完成
+         * @description 仅原上传者可确认；验证对象存在且大小一致后置为 UPLOADED，重复确认幂等
+         */
+        post: operations["confirmAttachmentUpload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1644,7 +1664,7 @@ export interface paths {
         put?: never;
         /**
          * 获取交付物上传凭证
-         * @description 仅任务的接单飞手可调用；校验类型（图片 jpeg/png/webp ≤20MB，视频 mp4/mov ≤500MB）后返回 presigned PUT URL（15 分钟有效），客户端直传 MinIO
+         * @description 任务所有者或接单飞手可调用；校验类型（图片 jpeg/png/webp ≤20MB，视频 mp4/mov ≤500MB）后返回 presigned PUT URL（15 分钟有效）并登记 PENDING；直传后须调用 confirm-upload
          */
         post: operations["uploadUrl"];
         delete?: never;
@@ -2346,10 +2366,45 @@ export interface components {
              */
             userId?: number;
         };
+        /** @description 管理端用户名下投诉摘要 */
+        AdminUserComplaintVo: {
+            /** @description 管理员备注 */
+            adminNote?: string;
+            /**
+             * Format: date-time
+             * @description 提交时间
+             */
+            createTime?: string;
+            /** @description 用户描述 */
+            description?: string;
+            /**
+             * Format: int64
+             * @description 投诉ID
+             */
+            id?: number;
+            /** @description 关联订单号 */
+            orderNum?: string;
+            /** @description 投诉原因枚举名（ComplaintReason） */
+            reason?: string;
+            /**
+             * Format: date-time
+             * @description 处理完成时间
+             */
+            resolveTime?: string;
+            /** @description 处理状态枚举名（ComplaintStatus） */
+            status?: string;
+        };
         /** @description 管理端用户详情（含关联订单摘要） */
         AdminUserDetailVo: {
+            /** @description 名下投诉（按提交时间倒序，无则为空数组） */
+            complaints?: components["schemas"]["AdminUserComplaintVo"][];
             /** @description 关联订单（按创建时间倒序，无订单为空数组） */
             orders?: components["schemas"]["AdminOrderVo"][];
+            /**
+             * Format: date-time
+             * @description 注册时间（存量用户可能为空）
+             */
+            registerTime?: string;
             /**
              * Format: int32
              * @description 角色（0 普通用户 / 2 管理员；飞手不走本详情）
@@ -2372,9 +2427,19 @@ export interface components {
         AdminUserVo: {
             /**
              * Format: int64
+             * @description 名下投诉（争议）总数
+             */
+            disputeCount?: number;
+            /**
+             * Format: int64
              * @description 名下订单总数
              */
             orderCount?: number;
+            /**
+             * Format: date-time
+             * @description 注册时间（存量用户可能为空）
+             */
+            registerTime?: string;
             /**
              * Format: int32
              * @description 账号状态（1 正常 / 0 停用）
@@ -6075,6 +6140,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultListMapStringObject"];
+                };
+            };
+        };
+    };
+    confirmAttachmentUpload: {
+        parameters: {
+            query: {
+                objectKey: string;
+            };
+            header?: never;
+            path: {
+                taskNum: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultMapStringObject"];
                 };
             };
         };
