@@ -49,17 +49,20 @@ jobs:
           else
             echo "来源：schedule/workflow_dispatch，查询最新 contract-* Release"
             
-            # 查询最新 contract-* Release
-            RELEASE_JSON=$(gh api repos/UavPlatform/backend/releases \
-              --jq '[.[] | select(.tag_name | startswith("contract-"))] | .[0]')
+            # 使用 gh release list 查询最新 contract-* Release（更可靠）
+            TAG=$(gh release list --repo UavPlatform/backend --limit 100 \
+              | awk -F'\t' '$3 ~ /^contract-/ {print $3; exit}')
             
-            if [ -z "$RELEASE_JSON" ] || [ "$RELEASE_JSON" = "null" ]; then
+            if [ -z "$TAG" ]; then
               echo "未找到 contract-* Release，回退到 raw URL"
               ASSET_URL="https://raw.githubusercontent.com/UavPlatform/backend/main/spec/openapi/drone-backend.openapi.json"
               TAG="raw-fallback"
               EXPECTED_SHA256=""
             else
-              TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+              echo "找到最新 contract Release: $TAG"
+              
+              # 获取 Release 详细信息
+              RELEASE_JSON=$(gh api "repos/UavPlatform/backend/releases/tags/$TAG")
               
               # 查找 drone-backend.openapi.json 资产
               ASSET_URL=$(echo "$RELEASE_JSON" | jq -r \
@@ -114,10 +117,10 @@ jobs:
 
       - name: Generate GitHub App token
         id: app-token
-        if: vars.CONTRACT_BOT_APP_ID != ''
+        continue-on-error: true
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ vars.CONTRACT_BOT_APP_ID }}
+          app-id: ${{ secrets.CONTRACT_BOT_APP_ID }}
           private-key: ${{ secrets.CONTRACT_BOT_PRIVATE_KEY }}
 
       - name: Create Pull Request
