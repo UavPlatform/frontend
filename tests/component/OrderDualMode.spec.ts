@@ -22,10 +22,12 @@ const {
   fetchTaskEvidence,
   fetchOrderComplaints,
   getOrderTrajectory,
+  getUavPosition,
   requestStartLive,
   closeLive,
   watchLiveStop,
   getPullCredentials,
+  leaveLive,
 } = vi.hoisted(() => ({
   getAdminOrderDetail: vi.fn(),
   getAdminTaskDetail: vi.fn(),
@@ -34,10 +36,12 @@ const {
   fetchTaskEvidence: vi.fn(),
   fetchOrderComplaints: vi.fn(),
   getOrderTrajectory: vi.fn(),
+  getUavPosition: vi.fn(),
   requestStartLive: vi.fn(),
   closeLive: vi.fn(),
   watchLiveStop: vi.fn(),
   getPullCredentials: vi.fn(),
+  leaveLive: vi.fn(),
 }))
 
 vi.mock('../../src/api/modules/admin-query', async () => {
@@ -68,11 +72,12 @@ vi.mock('../../src/api/modules/live', () => ({
   closeLive,
   watchLiveStop,
   getPullCredentials,
+  leaveLive,
 }))
 
 vi.mock('../../src/api/modules/uav', async () => {
   const actual = (await vi.importActual('../../src/api/modules/uav')) as Record<string, unknown>
-  return { ...actual, getOrderTrajectory }
+  return { ...actual, getOrderTrajectory, getUavPosition }
 })
 
 // 真实 TRTC SDK 在测试环境不可用；只验「只读接入 → 渲染播放器」这一行为
@@ -265,6 +270,7 @@ describe('订单详情双模式（TASK-FRONTEND-003）', () => {
     fetchTaskEvidence.mockResolvedValue(evidenceFixture)
     fetchOrderComplaints.mockResolvedValue([complaintFixture])
     getOrderTrajectory.mockResolvedValue(trajectoryFixture)
+    getUavPosition.mockResolvedValue(trajectoryFixture.at(-1))
     getPullCredentials.mockResolvedValue(credentialsFixture)
   })
 
