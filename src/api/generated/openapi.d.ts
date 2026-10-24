@@ -1936,7 +1936,7 @@ export interface paths {
         };
         /**
          * 查询无人机实时位置
-         * @description 优先内存实时数据，内存无数据时降级为 DB 最近 2 分钟内的记录
+         * @description 优先内存实时数据，内存无数据时降级为 DB 最近 2 分钟内的记录；无位置数据时 data 为 null
          */
         get: operations["getPosition"];
         put?: never;
@@ -2614,8 +2614,11 @@ export interface components {
         PullCredentialsVO: {
             /** @description 设备图传是否已在运行（true 表示可直接拉流） */
             ackConfirmed?: boolean;
-            /** @description 直播会话状态（IDLE 空闲 / STARTING 启动中 / RUNNING 运行中） */
-            liveState?: string;
+            /**
+             * @description 直播会话状态（IDLE 空闲 / STARTING 启动中 / RUNNING 运行中）
+             * @enum {string}
+             */
+            liveState?: "IDLE" | "RUNNING" | "STARTING";
             /** @description TRTC 房间号 */
             roomId?: string;
             /**
@@ -6577,7 +6580,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description 成功；无位置数据时 data 为 null（不报错） */
             200: {
                 headers: {
                     [name: string]: unknown;
