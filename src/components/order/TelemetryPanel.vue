@@ -1,35 +1,73 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { fetchOrderTelemetry } from '../../api/modules/order-supervision'
+import {
+  fetchOrderPosition,
+  fetchOrderStartedAt,
+  fetchOrderTelemetry,
+} from '../../api/modules/order-supervision'
 import type { TelemetrySummary } from '../../utils/telemetry'
 import { formatClock, formatDuration } from '../../utils/date'
 
 /**
  * 遥测摘要面板（任务监管 Tab / 全屏监管共用）：
- * 数据源 `/webUav/trajectory?orderNum=`（订单维度，管理端可读），10 秒轮询，卸载即停。
+ * 轮询 `/webUav/position?deviceId=`（单点实时位置，10 秒一次，卸载即停）；
+ * 起飞时间读取 `/webUav/trajectory?orderNum=` 的首点后缓存；空结果最多尝试三次。
+ * 无作业设备（null）时不轮询，只取一次订单轨迹摘要兜底；两者都无数据才提示无遥测。
  */
-const props = defineProps<{ orderNum: string }>()
+const props = defineProps<{
+  orderNum: string
+  /** 作业设备；undefined = 解析中，null = 该任务无作业设备 */
+  deviceId?: string | null
+}>()
 
 const TELEMETRY_POLL_MS = 10_000
+const STARTED_AT_MAX_TRIES = 3
 
 const telemetry = ref<TelemetrySummary | null>()
 const loading = ref(false)
 
 let requestSeq = 0
 let disposed = false
-let inFlightOrder = ''
+let inFlightKey = ''
+/** 只缓存成功取得的起飞时间；空结果在后续刷新时重试，总计最多三次。 */
+const startedAtByOrder = new Map<string, number>()
+const startedAtTries = new Map<string, number>()
+
 const refresh = async () => {
   const orderNum = props.orderNum
-  if (disposed || (inFlightOrder === orderNum && loading.value)) return
+  const deviceId = props.deviceId
+  const requestKey = `${orderNum}\u0000${deviceId ?? 'pending'}`
+  if (disposed || (inFlightKey === requestKey && loading.value)) return
   const seq = ++requestSeq
   if (!orderNum) { telemetry.value = null; loading.value = false; return }
-  inFlightOrder = orderNum
+  if (deviceId === undefined) {
+    // 设备解析中：不清空已有数据，等 deviceId 落定后再取
+    loading.value = false
+    return
+  }
+  inFlightKey = requestKey
   loading.value = true
   try {
-    const result = await fetchOrderTelemetry(orderNum)
-    if (!disposed && seq === requestSeq) telemetry.value = result
+    if (!deviceId) {
+      const result = await fetchOrderTelemetry(orderNum)
+      if (!disposed && seq === requestSeq) telemetry.value = result ?? null
+      return
+    }
+    let startedAt = startedAtByOrder.get(orderNum)
+    const tries = startedAtTries.get(orderNum) ?? 0
+    if (startedAt === undefined && tries < STARTED_AT_MAX_TRIES) {
+      startedAtTries.set(orderNum, tries + 1)
+      const fetchedStartedAt = await fetchOrderStartedAt(orderNum)
+      if (disposed || seq !== requestSeq) return
+      if (fetchedStartedAt != null) {
+        startedAtByOrder.set(orderNum, fetchedStartedAt)
+        startedAt = fetchedStartedAt
+      }
+    }
+    const result = await fetchOrderPosition(deviceId, startedAt)
+    if (!disposed && seq === requestSeq) telemetry.value = result ?? null
   } finally {
-    if (!disposed && seq === requestSeq) { loading.value = false; inFlightOrder = '' }
+    if (!disposed && seq === requestSeq) { loading.value = false; inFlightKey = '' }
   }
 }
 
@@ -61,6 +99,7 @@ const metrics = computed(() => {
 })
 
 const empty = computed(() => !loading.value && telemetry.value === null)
+const noDevice = computed(() => props.deviceId === null || props.deviceId === '')
 
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const stopPolling = () => {
@@ -71,14 +110,21 @@ const stopPolling = () => {
 }
 
 watch(
-  () => props.orderNum,
-  async (_orderNum, _old, onCleanup) => {
+  () => [props.orderNum, props.deviceId] as const,
+  async ([, deviceId], _old, onCleanup) => {
     let active = true
-    onCleanup(() => { active = false; stopPolling() })
+    onCleanup(() => {
+      active = false
+      requestSeq += 1
+      inFlightKey = ''
+      loading.value = false
+      stopPolling()
+    })
     stopPolling()
     telemetry.value = undefined
+    if (deviceId === undefined) return
     await refresh()
-    if (active && !disposed && props.orderNum) {
+    if (active && !disposed && props.orderNum && deviceId) {
       pollTimer = setInterval(() => {
         void refresh()
       }, TELEMETRY_POLL_MS)
@@ -97,7 +143,8 @@ onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
       <el-button size="small" :loading="loading" @click="refresh">刷新</el-button>
     </div>
 
-    <div v-if="empty" class="empty-note">遥测暂无数据（等待设备上报）</div>
+    <div v-if="empty && noDevice" class="empty-note">该任务暂无作业设备，无可读取的实时遥测</div>
+    <div v-else-if="empty" class="empty-note">遥测暂无数据（等待设备上报）</div>
 
     <div v-else class="metric-grid mt-3">
       <div v-for="item in metrics" :key="item.label" class="metric-cell">

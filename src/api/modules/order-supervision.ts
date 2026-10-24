@@ -1,10 +1,12 @@
 import { apiGet, expectData, type Schemas } from '../contract'
 import { getAdminComplaints } from './admin-query'
-import { getPullCredentials } from './live'
-import { getOrderTrajectory } from './uav'
-import { summarizeTrajectory, type TelemetrySummary } from '../../utils/telemetry'
+import { getOrderTrajectory, getUavPosition } from './uav'
+import {
+  summarizePosition,
+  summarizeTrajectory,
+  type TelemetrySummary,
+} from '../../utils/telemetry'
 import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../../types/admin'
-import type { LiveCredentials } from '../../types/uav'
 
 /**
  * 订单详情双模式（TASK-FRONTEND-003）的取数与 VO 映射——撮合字段的唯一读取点。
@@ -157,14 +159,28 @@ export const fetchOrderTelemetry = async (orderNum: string): Promise<TelemetrySu
 }
 
 /**
- * 只读拉流凭证（POST /live/get）：仅生成 TRTC 观看凭据，不下发开播/停播命令（ADR-0004 旁听语义）。
- * 设备离线/未开播 → null，图传区降级为提示。
+ * 遥测轮询用 `/webUav/position` 取最新一点，代替早期每 10 秒拉整条
+ * `/webUav/trajectory`（订单全量点位，越飞越慢）。单点推不出起飞时间，
+ * 由调用方一次性取轨迹起点后经 startedAt 传入；缺失只影响「已飞时长」。
  */
-export const fetchWatchCredentials = async (deviceId: string): Promise<LiveCredentials | null> => {
+export const fetchOrderPosition = async (
+  deviceId: string,
+  startedAt?: number | null,
+): Promise<TelemetrySummary | null> => {
   try {
-    return await getPullCredentials(deviceId, '')
+    return summarizePosition(await getUavPosition(deviceId), startedAt ?? undefined) ?? null
   } catch (err) {
-    console.warn('[order-supervision] 拉流凭证不可用：', err)
+    console.warn('[order-supervision] 实时位置不可用：', err)
+    return null
+  }
+}
+
+/** 起飞时间：订单首帧轨迹的首点时间戳；无轨迹/接口失败 → null（不阻断轮询） */
+export const fetchOrderStartedAt = async (orderNum: string): Promise<number | null> => {
+  try {
+    return summarizeTrajectory(await getOrderTrajectory(orderNum))?.startedAt ?? null
+  } catch (err) {
+    console.warn('[order-supervision] 轨迹起点不可用：', err)
     return null
   }
 }
