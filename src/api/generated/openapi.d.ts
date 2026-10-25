@@ -701,6 +701,1086 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dispatch/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 评估完整运单
+         * @description 服务端校验全量文本并读取空域航程地形；缺失服务503，禁飞orderAllowed=false；评估15分钟有效，不是派单超时
+         */
+        post: operations["assess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 派单固定金额配置
+         * @description 需登录；仅返回平台定金和按单飞手服务费，非总价或预估价；orderingEnabled取决于服务端评估数据和受限模拟支付是否可用
+         */
+        get: operations["config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 本人订单变更实时信号
+         * @description Bearer头鉴权；ready/change/resync事件触发客户端重新读取有权限的数据，heartbeat仅保活。不携带订单内容或凭证，不接受URL令牌。重连ready完整同步，无历史事件重放。单连接最多60秒且不超过JWT有效期。
+         */
+        get: operations["dispatchEventStream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页读取本人派单通知
+         * @description 时间倒序每页20条，包含订单ID、收件人角色和已读状态；只读不自动清空未读，点击后打开订单当前阶段
+         */
+        get: operations["dispatchNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取本人派单通知未读数 */
+        get: operations["dispatchNotificationUnreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/notifications/{notificationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 标记一条本人通知已读
+         * @description 只作用于所选通知，重复调用幂等，不会误清除其他或稍后收到的通知
+         */
+        post: operations["readDispatchNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我的派单运单
+         * @description 返回本人最近50笔，独立于历史撮合订单；退出App后可继续查询待付款和退款结果
+         */
+        get: operations["listDispatchOrders"];
+        put?: never;
+        /**
+         * 创建待付定金运单
+         * @description 仅模拟环境；需真实性声明及本人有效评估，运单变更使旧评估失效；requestKey按用户幂等，不同内容重用返回409；金额为后端快照
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询派单运单
+         * @description 本人订单与独立资金状态，服务端结果为准
+         */
+        get: operations["get_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 取消派单运单
+         * @description 仅当前模拟通道；未付取消不退款，已付全额模拟退定金，重复请求不重复退款；stage与fundsStatus独立，非真实到账
+         */
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 打开本次接单的订单聊天
+         * @description REQ-SHIP-EXEC-002 / REQ-PILOT-EXEC-006；仅货主与当前飞手，服务端选择成员，按订单及指派轮次幂等；退出或重新派单后旧会话不可访问；结单只读已有会话
+         */
+        post: operations["openDispatchChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 提交送达材料
+         * @description 运输中飞手提交本人本次指派且用途为PILOT_DELIVERY的已核验对象材料，随后等待需求方收货材料；上传地址或PUT成功本身不算凭证
+         */
+        post: operations["deliver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/flight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取实际飞行状态
+         * @description 仅货主、当前飞手或管理员。无采样字段为null；30秒未收到数据或连接结束标记stale。最后位置保留接收时间。非官方飞行安全或空域判定。
+         */
+        get: operations["current_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/flight/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取本单实际采样轨迹
+         * @description 同飞行状态权限，after为上页nextAfter；每页200条，保持服务端保存顺序；不插值补点。
+         */
+        get: operations["track"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 本单直播状态
+         * @description 货主/当前飞手/管理员只读，不启动直播；未配置或心跳过期不可观看。此接口没有凭证和副作用。
+         */
+        get: operations["current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/live/{liveId}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 本单只读观看凭证
+         * @description 运输中的当前连接且实际首帧已上报、心跳有效；返回绑定本次房间的120秒进房票据，仅接收视频，无发流或开关权限。观看退出不影响飞手。
+         */
+        post: operations["watch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/materials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取已核验运单材料
+         * @description 仅需求方或当前指派飞手；仅返回当前仍真实存在且大小匹配的已确认对象，不返回待上传记录
+         */
+        get: operations["dispatchMaterials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/materials/upload-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 申请材料直传地址
+         * @description 目的及阶段由后端校验；使用现有对象存储；客户端PUT必须不带业务Authorization，Content-Type与票据一致；此步骤不算材料成功
+         */
+        post: operations["ticket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/materials/{materialId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认已上传对象材料
+         * @description 仅票据上传人，本订单及当前阶段；服务端核验实际对象存在与字节数后才返回UPLOADED
+         */
+        post: operations["confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/nearby-dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 本人运单的附近派单进度
+         * @description 当前轮次实际生成站内派单通知的去重人数；不是手机推送或已读人数；等待十分钟后提醒，保持原半径，不自动取消
+         */
+        get: operations["nearbyDispatchStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 提交收货材料并结单
+         * @description 需求方提交本人SHIPPER_RECEIPT材料，重新核验双方对象存在及大小后结单；按下单距离快照结算；差额为负则全额模拟退差，不额外收定金
+         */
+        post: operations["receipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 评价已结算订单
+         * @description 本人已结单且资金结算完成后提交1至5分及可选文字，一单一次，相同请求幂等
+         */
+        post: operations["review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 模拟支付尾款
+         * @description 仅订单本人、已结单及受限模拟环境；金额由后端下单距离快照减已付定金确定，不接收客户端金额，重复调用不重复入账
+         */
+        post: operations["settle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/simulate-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 模拟支付定金
+         * @description 仅dev/test及显式模拟开关；不接受客户端金额和支付成功标记；原子入账后进入等待接单，重复调用返回同一结果；非真实微信支付
+         */
+        post: operations["pay_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/orders/{orderId}/start-transport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 确认开始运输
+         * @description 当前飞手、当前指派版本且已到场；记录业务运输状态，不发送飞控命令或伪称系统已核验实际起飞
+         */
+        post: operations["startTransport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/hall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 派单大厅
+         * @description 分页公开已付定金且等待接单的订单，不返回联系人、电话、备注、资金流水；不表示附近推送或真实收入测算
+         */
+        get: operations["hall"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/nearby-hall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按有效位置筛选附近订单
+         * @description 按起点直线距离筛选后分页，缺位置或位置过期返回LOCATION_REQUIRED，不降级为全部；不返回联系人或其他飞手坐标
+         */
+        get: operations["nearbyDispatchHall"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 我接到的派单
+         * @description 本人当前指派及需求方取消的最近50笔；飞手主动退出后不再具有完整运单读取权限
+         */
+        get: operations["mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取本人派单
+         * @description 仅当前指派飞手读取完整运单，含双方联系人和场地；非接单者404
+         */
+        get: operations["get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 标记已到场
+         * @description 仅当前接单飞手及当前assignmentVersion，更新真实数据库状态；不代表系统验证了GPS到场或货物交接
+         */
+        post: operations["arrive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 立即接单
+         * @description 传大厅offerRevision；服务端锁定，只有一人成功；其他人409。相同飞手相同卡片的成功重试幂等，旧卡片不能在重新派单后再次抢走订单
+         */
+        post: operations["claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 登记本次实际设备连接
+         * @description 当前到场或运输飞手及接单轮次；同请求幂等，换机结束旧连接。设备序列号同时只属于一个活动运单。未知机型不推测载重，不改变计价。
+         */
+        post: operations["connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 结束本人设备连接
+         * @description 原飞手可幂等结束自己的连接；历史请求不能结束新连接；不控制物理飞行，成功data=null。
+         */
+        post: operations["close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 飞手主动开启本次连接直播
+         * @description 当前飞手和接单轮次，到场/运输阶段；同requestKey幂等。新派单复用既有TRTC应用配置且需确认已启用房间权限，未配置503。此调用不代表首帧成功。
+         */
+        post: operations["start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/live/{liveId}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上报本单真实推流状态
+         * @description SDK发出首帧且继续发送实际图传才报RUNNING，否则STARTING；有效期20秒，过期不允许续活旧房间。
+         */
+        post: operations["heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/live/{liveId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 飞手关闭本次直播记录
+         * @description 本人历史房间可幂等关闭，不能关闭新房间；客户端同步停止实际推流，成功data=null。
+         */
+        post: operations["stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 保存实际SDK采样
+         * @description 仅当前活动连接；未知值为null，禁止合成遥测；同序号同内容幂等，冲突409。乱序保存但不回退当前状态。capturedAt为设备毫秒时间，receivedAt为服务端时间。
+         */
+        post: operations["sample"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 取消接单并重新派单
+         * @description 准备或到场阶段，传本人assignmentVersion；回到大厅且保留已付定金，不收取消费、不限制次数；历史重试不影响后续接单者；成功data=null
+         */
+        post: operations["release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 更新本人附近派单位置
+         * @description 仅当前飞手；GCJ02真实SDK采样，拒绝模拟、过期与非有限值；只保留最新位置，不接受客户端用户ID；重放旧采样不续期
+         */
+        put: operations["updateDispatchPosition"];
+        post?: never;
+        /** 停止附近匹配并清除本人最新位置 */
+        delete: operations["clearDispatchPosition"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/position-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 开启新的附近位置会话
+         * @description 仅当前飞手；立即使旧会话失效并清除旧坐标；不取得定位，不算已匹配；迟到的旧上报不能恢复已关闭会话
+         */
+        post: operations["beginDispatchPositionSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下单开放条件
+         * @description 返回真实阻塞原因；不查询天气、不拼造总价；SIMULATED表示无真实扣款
+         */
+        get: operations["readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/waybill-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取我的运单草稿
+         * @description 仅需求方本人；无草稿时 success=true,data=null；照片仍只保存在本机，不包含于账号草稿
+         */
+        get: operations["draft"];
+        /**
+         * 保存我的运单草稿
+         * @description 允许部分文本输入；不创建任务、订单或支付；首次保存 expectedRevision 省略，后续传最新 revision；并发或旧版本写入返回409/WAYBILL_DRAFT_CONFLICT；拒绝未知字段、价格和本机照片路径
+         */
+        put: operations["save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/admin/borrows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 监管查看全部借还登记 */
+        get: operations["equipmentAdminBorrows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/admin/drones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 监管查看全部服务商设备登记 */
+        get: operations["equipmentAdminDrones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/admin/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页读取服务商账号 */
+        get: operations["equipmentProviders"];
+        put?: never;
+        /**
+         * 平台开通服务商账号
+         * @description 仅现有管理员；密码仅以BCrypt保存，响应不含密码或哈希；无公开注册入口
+         */
+        post: operations["provisionProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/admin/providers/{providerId}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 启停服务商账号
+         * @description 停用后既有令牌不能再管理设备；已借设备仍可由原飞手归还
+         */
+        post: operations["providerEnabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/pilot/borrows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页读取本人借还记录 */
+        get: operations["pilotBorrows"];
+        put?: never;
+        /**
+         * 登记借用无人机
+         * @description 请求标识按当前飞手幂等；同一设备并发只能借出一次，不接收用户ID、订单或金额
+         */
+        post: operations["borrowDrone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/pilot/borrows/{borrowId}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 登记归还本人借用设备
+         * @description 按原借用ID归还，重复请求幂等，旧归还重试不影响后续借用；设备或服务商停用不阻止本人归还
+         */
+        post: operations["returnDrone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/pilot/drones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页读取可借设备目录
+         * @description 只列启用服务商、设备和机型；已借出显示不可借，不返回其他飞手的借用标识或身份
+         */
+        get: operations["pilotEquipment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/borrows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 分页读取本机构借还记录
+         * @description 仅本人机构登记的设备；借还不关联订单、收费或押金
+         */
+        get: operations["providerBorrows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/drones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页读取本机构无人机 */
+        get: operations["providerDrones"];
+        put?: never;
+        /**
+         * 登记本机构无人机
+         * @description 真实机身号全局唯一，选择现有启用机型并登记机场；不产生费用、不创建旧绑定记录
+         */
+        post: operations["registerProviderDrone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/drones/{droneId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 修改本机构无人机登记
+         * @description 借出期间不可修改；产生借还记录后机身号和机型不可改写，以保留设备身份历史；可在归还后更新机场资料
+         */
+        put: operations["updateProviderDrone"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/drones/{droneId}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 启停本机构无人机借用
+         * @description 停用不替飞手归还已借设备，仍允许原飞手完成归还
+         */
+        post: operations["providerDroneEnabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 服务商登录
+         * @description 账号由平台管理员开通，无自助注册；返回独立role=3访问令牌，不可用于旧用户、监管和飞控接口
+         */
+        post: operations["providerLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/equipment/provider/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取本人服务商资料 */
+        get: operations["providerMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/live/close": {
         parameters: {
             query?: never;
@@ -2488,6 +3568,362 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
+        DispatchAssignmentDTO: {
+            /** Format: int64 */
+            assignmentVersion: number;
+        };
+        DispatchBillVO: {
+            balanceAmount?: number;
+            finalAmount?: number;
+            quote?: components["schemas"]["DispatchQuoteVO"];
+            reviewComment?: string;
+            /** Format: int32 */
+            reviewScore?: number;
+            /** Format: date-time */
+            settledAt?: string;
+            settlementReference?: string;
+        };
+        DispatchChatVO: {
+            /** Format: int64 */
+            assignmentVersion?: number;
+            orderId?: string;
+            /** Format: int64 */
+            sessionId?: number;
+        };
+        DispatchClaimDTO: {
+            /** Format: int64 */
+            offerRevision: number;
+        };
+        DispatchConfigVO: {
+            currency?: string;
+            depositAmount?: number;
+            orderingEnabled?: boolean;
+            pilotServiceFee?: number;
+        };
+        DispatchDeliveryDTO: {
+            /** Format: int64 */
+            assignmentVersion: number;
+            materialIds: string[];
+        };
+        DispatchEvaluationVO: {
+            airspace?: string;
+            altitudeDifferenceMeters?: number;
+            distanceMeters?: number;
+            flightMinutes?: number;
+            source?: string;
+            terrain?: string;
+            warnings?: string[];
+        };
+        DispatchHallVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["DispatchOfferVO"][];
+            /** Format: int32 */
+            page?: number;
+        };
+        DispatchLiveCredentialsVO: {
+            connectionId?: string;
+            /** Format: int64 */
+            expiresAt?: number;
+            /** Format: int64 */
+            leaseExpiresAt?: number;
+            liveId?: string;
+            privateMapKey?: string;
+            publisherUserId?: string;
+            roomId?: string;
+            /** Format: int64 */
+            sdkAppId?: number;
+            userId?: string;
+            userSig?: string;
+        };
+        DispatchLiveHeartbeatDTO: {
+            state: string;
+        };
+        DispatchLiveStartDTO: {
+            requestKey: string;
+        };
+        DispatchLiveStatusVO: {
+            configured?: boolean;
+            connectionId?: string;
+            /** Format: int64 */
+            leaseExpiresAt?: number;
+            liveId?: string;
+            state?: string;
+        };
+        DispatchMaterialUploadDTO: {
+            contentType: string;
+            fileName: string;
+            purpose: string;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
+        DispatchMaterialVO: {
+            /** Format: date-time */
+            confirmedAt?: string;
+            contentType?: string;
+            downloadUrl?: string;
+            fileName?: string;
+            materialId?: string;
+            purpose?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            uploadStatus?: string;
+            /** Format: int64 */
+            uploaderId?: number;
+        };
+        DispatchNearbyHallVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["DispatchNearbyOfferVO"][];
+            /** Format: int64 */
+            locationExpiresAt?: number;
+            locationState?: string;
+            /** Format: int32 */
+            page?: number;
+            /** Format: double */
+            radiusKm?: number;
+        };
+        DispatchNearbyOfferVO: {
+            /** Format: double */
+            distanceMeters?: number;
+            offer?: components["schemas"]["DispatchOfferVO"];
+        };
+        DispatchNearbyStatusVO: {
+            /** Format: int64 */
+            assignmentVersion?: number;
+            /** Format: int64 */
+            notifiedPilotCount?: number;
+            orderId?: string;
+            /** Format: double */
+            radiusKm?: number;
+            /** Format: date-time */
+            reminderAt?: string;
+            reminderSent?: boolean;
+            state?: string;
+            systemPushEnabled?: boolean;
+            /** Format: date-time */
+            waitingSince?: string;
+        };
+        DispatchNotificationPageVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["DispatchNotificationVO"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int64 */
+            unreadCount?: number;
+        };
+        DispatchNotificationVO: {
+            audience?: string;
+            body?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            kind?: string;
+            notificationId?: string;
+            orderId?: string;
+            /** Format: date-time */
+            readAt?: string;
+            title?: string;
+        };
+        DispatchOfferVO: {
+            /** Format: date-time */
+            createdAt?: string;
+            fields?: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            offerRevision?: number;
+            orderId?: string;
+            pilotServiceFee?: number;
+        };
+        DispatchOrderDTO: {
+            assessmentId: string;
+            declarationAccepted: boolean;
+            requestKey: string;
+            waybill: components["schemas"]["WaybillDraftDTO"];
+        };
+        DispatchOrderVO: {
+            /** Format: int64 */
+            assignedPilotId?: number;
+            /** Format: int64 */
+            assignmentVersion?: number;
+            bill?: components["schemas"]["DispatchBillVO"];
+            /** Format: date-time */
+            createdAt?: string;
+            currency?: string;
+            /** Format: date-time */
+            deliveredAt?: string;
+            depositAmount?: number;
+            fields?: {
+                [key: string]: string;
+            };
+            fundsStatus?: string;
+            orderId?: string;
+            paymentMode?: string;
+            paymentReference?: string;
+            pilotServiceFee?: number;
+            /** Format: date-time */
+            receiptAt?: string;
+            refundReference?: string;
+            stage?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        DispatchPositionDTO: {
+            /** Format: double */
+            accuracyMeters: number;
+            /** Format: int64 */
+            capturedAt: number;
+            coordinateSystem: string;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            longitude: number;
+            mocked: boolean;
+            sessionKey: string;
+        };
+        DispatchPositionVO: {
+            /** Format: double */
+            accuracyMeters?: number;
+            coordinateSystem?: string;
+            /** Format: int64 */
+            expiresAt?: number;
+            /** Format: int64 */
+            receivedAt?: number;
+        };
+        DispatchQuoteVO: {
+            depositAmount?: number;
+            distanceBasis?: string;
+            distanceCharge?: number;
+            distanceMeters?: number;
+            pilotServiceFee?: number;
+            pricePerMeter?: number;
+            rule?: string;
+            totalAmount?: number;
+        };
+        DispatchReadinessVO: {
+            blockers?: string[];
+            orderingEnabled?: boolean;
+            paymentMode?: string;
+        };
+        DispatchReceiptDTO: {
+            materialIds: string[];
+        };
+        DispatchReviewDTO: {
+            comment?: string;
+            /** Format: int32 */
+            score: number;
+        };
+        DispatchUploadTicketVO: {
+            contentType?: string;
+            /** Format: int32 */
+            expireSeconds?: number;
+            materialId?: string;
+            method?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            uploadUrl?: string;
+        };
+        DroneBorrowDTO: {
+            droneId: string;
+            requestKey: string;
+        };
+        DroneBorrowPageVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["DroneBorrowVO"][];
+            /** Format: int32 */
+            page?: number;
+        };
+        DroneBorrowVO: {
+            borrowId?: string;
+            /** Format: date-time */
+            borrowedAt?: string;
+            drone?: components["schemas"]["ProviderDroneVO"];
+            /** Format: int64 */
+            pilotId?: number;
+            /** Format: date-time */
+            returnedAt?: string;
+        };
+        EquipmentEnabledDTO: {
+            enabled: boolean;
+        };
+        FlightConnectDTO: {
+            /** Format: int64 */
+            assignmentVersion?: number;
+            modelCode: string;
+            modelName: string;
+            requestKey: string;
+            serialNumber: string;
+        };
+        FlightConnectionVO: {
+            /** Format: int64 */
+            aircraftModelId?: number;
+            /** Format: int64 */
+            assignmentVersion?: number;
+            connectionId?: string;
+            endReason?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            maxPayloadKg?: number;
+            modelCode?: string;
+            modelName?: string;
+            /** Format: date-time */
+            openedAt?: string;
+            orderId?: string;
+            overweight?: boolean;
+            serialNumber?: string;
+        };
+        FlightSampleDTO: {
+            /** Format: double */
+            altitude?: number;
+            /** Format: int32 */
+            battery?: number;
+            /** Format: int64 */
+            capturedAt?: number;
+            flying?: boolean;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            /** Format: int64 */
+            sequence?: number;
+            /** Format: double */
+            speed?: number;
+        };
+        FlightSampleVO: {
+            /** Format: double */
+            altitude?: number;
+            /** Format: int32 */
+            battery?: number;
+            /** Format: int64 */
+            capturedAt?: number;
+            connectionId?: string;
+            flying?: boolean;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            /** Format: date-time */
+            receivedAt?: string;
+            /** Format: int64 */
+            sampleId?: number;
+            /** Format: int64 */
+            sequence?: number;
+            /** Format: double */
+            speed?: number;
+        };
+        FlightTrackVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["FlightSampleVO"][];
+            /** Format: int64 */
+            nextAfter?: number;
+        };
+        FlightViewVO: {
+            connection?: components["schemas"]["FlightConnectionVO"];
+            connectionHistory?: components["schemas"]["FlightConnectionVO"][];
+            lastPosition?: components["schemas"]["FlightSampleVO"];
+            latest?: components["schemas"]["FlightSampleVO"];
+            stale?: boolean;
+        };
         GpsPointVO: {
             /** Format: double */
             altitude?: number;
@@ -2610,6 +4046,63 @@ export interface components {
             payUrl?: string;
             prepayId?: string;
         };
+        ProviderAccountPageVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["ProviderAccountVO"][];
+            /** Format: int32 */
+            page?: number;
+        };
+        ProviderAccountVO: {
+            displayName?: string;
+            enabled?: boolean;
+            /** Format: int64 */
+            providerId?: number;
+            username?: string;
+        };
+        ProviderDroneDTO: {
+            /** Format: int64 */
+            aircraftModelId: number;
+            airportName: string;
+            latitude: number;
+            longitude: number;
+            serialNumber: string;
+        };
+        ProviderDronePageVO: {
+            hasNext?: boolean;
+            items?: components["schemas"]["ProviderDroneVO"][];
+            /** Format: int32 */
+            page?: number;
+        };
+        ProviderDroneVO: {
+            /** Format: int64 */
+            aircraftModelId?: number;
+            airportName?: string;
+            borrowed?: boolean;
+            borrowedByMe?: boolean;
+            currentBorrowId?: string;
+            droneId?: string;
+            enabled?: boolean;
+            latitude?: number;
+            longitude?: number;
+            modelName?: string;
+            /** Format: int64 */
+            providerId?: number;
+            providerName?: string;
+            serialNumber?: string;
+        };
+        ProviderLoginDTO: {
+            password: string;
+            username: string;
+        };
+        ProviderLoginVO: {
+            provider?: components["schemas"]["ProviderAccountVO"];
+            token?: string;
+        };
+        ProviderProvisionDTO: {
+            displayName: string;
+            password: string;
+            username: string;
+        };
         /** @description TRTC 拉流凭证 */
         PullCredentialsVO: {
             /** @description 设备图传是否已在运行（true 表示可直接拉流） */
@@ -2619,6 +4112,8 @@ export interface components {
              * @enum {string}
              */
             liveState?: "IDLE" | "RUNNING" | "STARTING";
+            /** @description 绑定当前设备房间的接收权限票据，兼容高级房间权限 */
+            privateMapKey?: string;
             /** @description TRTC 房间号 */
             roomId?: string;
             /**
@@ -2851,6 +4346,310 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultDispatchChatVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchChatVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchConfigVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchConfigVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchHallVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchHallVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchLiveCredentialsVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchLiveCredentialsVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchLiveStatusVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchLiveStatusVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchMaterialVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchMaterialVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchNearbyHallVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchNearbyHallVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchNearbyStatusVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchNearbyStatusVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchNotificationPageVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchNotificationPageVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchOrderVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchOrderVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchPositionVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchPositionVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchReadinessVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchReadinessVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDispatchUploadTicketVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchUploadTicketVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDroneBorrowPageVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DroneBorrowPageVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultDroneBorrowVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DroneBorrowVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightConnectionVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightConnectionVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightSampleVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightSampleVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightTrackVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightTrackVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightViewVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightViewVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultGpsPointVO: {
             /**
              * Format: int32
@@ -2875,6 +4674,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AircraftModelVO"][];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultListDispatchMaterialVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchMaterialVO"][];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultListDispatchOrderVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["DispatchOrderVO"][];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -3077,6 +4908,25 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultLong: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /**
+             * Format: int64
+             * @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null）
+             */
+            data?: number;
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultMapStringObject: {
             /**
              * Format: int32
@@ -3193,6 +5043,86 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultProviderAccountPageVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["ProviderAccountPageVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultProviderAccountVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["ProviderAccountVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultProviderDronePageVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["ProviderDronePageVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultProviderDroneVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["ProviderDroneVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultProviderLoginVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["ProviderLoginVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultPullCredentialsVO: {
             /**
              * Format: int32
@@ -3281,6 +5211,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["SessionVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultString: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: string;
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -3489,6 +5435,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: unknown;
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultWaybillAssessmentVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["WaybillAssessmentVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultWaybillDraftVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["WaybillDraftVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -4045,6 +6023,38 @@ export interface components {
             password?: string;
             /** @description userName */
             userName?: string;
+        };
+        WaybillAssessmentVO: {
+            assessmentId?: string;
+            evaluation?: components["schemas"]["DispatchEvaluationVO"];
+            /** Format: date-time */
+            expiresAt?: string;
+            orderAllowed?: boolean;
+            quote?: components["schemas"]["DispatchQuoteVO"];
+        };
+        WaybillDraftDTO: {
+            /** Format: int64 */
+            expectedRevision?: number;
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: int32 */
+            schemaVersion: number;
+            /** Format: int32 */
+            step: number;
+        };
+        WaybillDraftVO: {
+            fields?: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            revision?: number;
+            /** Format: int32 */
+            schemaVersion?: number;
+            /** Format: int32 */
+            step?: number;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         WaypointDto: {
             /** Format: double */
@@ -4964,6 +6974,1402 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    assess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaybillDraftDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultWaybillAssessmentVO"];
+                };
+            };
+        };
+    };
+    config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchConfigVO"];
+                };
+            };
+        };
+    };
+    dispatchEventStream: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+        };
+    };
+    dispatchNotifications: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchNotificationPageVO"];
+                };
+            };
+        };
+    };
+    dispatchNotificationUnreadCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultLong"];
+                };
+            };
+        };
+    };
+    readDispatchNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notificationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    listDispatchOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchOrderDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    openDispatchChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchAssignmentDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchChatVO"];
+                };
+            };
+        };
+    };
+    deliver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchDeliveryDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    current_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightViewVO"];
+                };
+            };
+        };
+    };
+    track: {
+        parameters: {
+            query?: {
+                after?: number;
+            };
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightTrackVO"];
+                };
+            };
+        };
+    };
+    current: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchLiveStatusVO"];
+                };
+            };
+        };
+    };
+    watch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                liveId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchLiveCredentialsVO"];
+                };
+            };
+        };
+    };
+    dispatchMaterials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListDispatchMaterialVO"];
+                };
+            };
+        };
+    };
+    ticket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchMaterialUploadDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchUploadTicketVO"];
+                };
+            };
+        };
+    };
+    confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                materialId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchMaterialVO"];
+                };
+            };
+        };
+    };
+    nearbyDispatchStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchNearbyStatusVO"];
+                };
+            };
+        };
+    };
+    receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchReceiptDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchReviewDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    settle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    pay_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    startTransport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchAssignmentDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    hall: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchHallVO"];
+                };
+            };
+        };
+    };
+    nearbyDispatchHall: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchNearbyHallVO"];
+                };
+            };
+        };
+    };
+    mine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultListDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    arrive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchAssignmentDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchClaimDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchOrderVO"];
+                };
+            };
+        };
+    };
+    connect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlightConnectDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightConnectionVO"];
+                };
+            };
+        };
+    };
+    close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchLiveStartDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchLiveCredentialsVO"];
+                };
+            };
+        };
+    };
+    heartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                liveId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchLiveHeartbeatDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchLiveStatusVO"];
+                };
+            };
+        };
+    };
+    stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                liveId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    sample: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlightSampleDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightSampleVO"];
+                };
+            };
+        };
+    };
+    release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchAssignmentDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    updateDispatchPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchPositionDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchPositionVO"];
+                };
+            };
+        };
+    };
+    clearDispatchPosition: {
+        parameters: {
+            query?: {
+                sessionKey?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    beginDispatchPositionSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultString"];
+                };
+            };
+        };
+    };
+    readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDispatchReadinessVO"];
+                };
+            };
+        };
+    };
+    draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultWaybillDraftVO"];
+                };
+            };
+        };
+    };
+    save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaybillDraftDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultWaybillDraftVO"];
+                };
+            };
+        };
+    };
+    equipmentAdminBorrows: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDroneBorrowPageVO"];
+                };
+            };
+        };
+    };
+    equipmentAdminDrones: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDronePageVO"];
+                };
+            };
+        };
+    };
+    equipmentProviders: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderAccountPageVO"];
+                };
+            };
+        };
+    };
+    provisionProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderProvisionDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderAccountVO"];
+                };
+            };
+        };
+    };
+    providerEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentEnabledDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderAccountVO"];
+                };
+            };
+        };
+    };
+    pilotBorrows: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDroneBorrowPageVO"];
+                };
+            };
+        };
+    };
+    borrowDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DroneBorrowDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDroneBorrowVO"];
+                };
+            };
+        };
+    };
+    returnDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                borrowId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDroneBorrowVO"];
+                };
+            };
+        };
+    };
+    pilotEquipment: {
+        parameters: {
+            query?: {
+                page?: string;
+                providerId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDronePageVO"];
+                };
+            };
+        };
+    };
+    providerBorrows: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDroneBorrowPageVO"];
+                };
+            };
+        };
+    };
+    providerDrones: {
+        parameters: {
+            query?: {
+                page?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDronePageVO"];
+                };
+            };
+        };
+    };
+    registerProviderDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDroneDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDroneVO"];
+                };
+            };
+        };
+    };
+    updateProviderDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDroneDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDroneVO"];
+                };
+            };
+        };
+    };
+    providerDroneEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentEnabledDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderDroneVO"];
+                };
+            };
+        };
+    };
+    providerLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderLoginDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderLoginVO"];
+                };
+            };
+        };
+    };
+    providerMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultProviderAccountVO"];
                 };
             };
         };
