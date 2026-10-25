@@ -942,6 +942,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dispatch/orders/{orderId}/flight/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 按时间查询历史轨迹（回放）
+         * @description 同飞行状态权限。按设备采集时间升序，可选from/to（毫秒，含端点）；续页传上页nextCapturedAt与nextSampleId；limit 1-1000，默认500。附带本单全部连机记录。遥测保留180天，超期采样不可查，连机记录与结算数据不受影响。
+         */
+        get: operations["history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dispatch/orders/{orderId}/flight/track": {
         parameters: {
             query?: never;
@@ -1313,7 +1333,7 @@ export interface paths {
         put?: never;
         /**
          * 登记本次实际设备连接
-         * @description 当前到场或运输飞手及接单轮次；同请求幂等，换机结束旧连接。设备序列号同时只属于一个活动运单。未知机型不推测载重，不改变计价。
+         * @description 当前到场或运输飞手及接单轮次；同请求幂等，换机结束旧连接。设备序列号同时只属于一个活动运单。未知机型不推测载重，不改变计价。断网先在本机记录的连接可在送达确认/结单阶段补登记（须带startedAt，仍限本人当前接单轮次）：存为已结束连接（结束于送达时刻），只用于补传采样，不替换活动连接。
          */
         post: operations["connect"];
         delete?: never;
@@ -1416,6 +1436,26 @@ export interface paths {
          * @description 仅当前活动连接；未知值为null，禁止合成遥测；同序号同内容幂等，冲突409。乱序保存但不回退当前状态。capturedAt为设备毫秒时间，receivedAt为服务端时间。
          */
         post: operations["sample"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/samples/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 批量上报/补传实际SDK采样
+         * @description djifly定时批量或断网恢复后补传，最多500条。按(连接,序号)与(机身号,采集时间)去重：已存在且内容一致计duplicates；非法、内容冲突或采集时间不在连接时段±10分钟内计rejected，客户端可丢弃；存储失败整批返回5xx，客户端保留缓存重试。连接结束后、送达确认或结单阶段仍可补传，但不更新实时状态。未知值为null。
+         */
+        post: operations["batch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1872,7 +1912,7 @@ export interface paths {
         put?: never;
         /**
          * 飞手主动开播
-         * @description 飞手对本人绑定且在线的设备发送开播请求（1B-4b）；设备归属校验 rider_uav
+         * @description 飞手对在线设备发送开播请求（1B-4b / ADR-0007）：设备须为本人派单任务当前连机的无人机，或旧流程中本人绑定（rider_uav）的设备
          */
         post: operations["riderStartLive"];
         delete?: never;
@@ -3614,6 +3654,13 @@ export interface components {
             terrain?: string;
             warnings?: string[];
         };
+        DispatchExecutedDroneVO: {
+            /** Format: int64 */
+            aircraftModelId?: number;
+            modelCode?: string;
+            modelName?: string;
+            serialNumber?: string;
+        };
         DispatchHallVO: {
             hasNext?: boolean;
             items?: components["schemas"]["DispatchOfferVO"][];
@@ -3751,6 +3798,7 @@ export interface components {
             /** Format: date-time */
             deliveredAt?: string;
             depositAmount?: number;
+            executedDrone?: components["schemas"]["DispatchExecutedDroneVO"];
             fields?: {
                 [key: string]: string;
             };
@@ -3853,6 +3901,11 @@ export interface components {
             modelName: string;
             requestKey: string;
             serialNumber: string;
+            /**
+             * Format: int64
+             * @description 设备本地记录连机的时间（毫秒）；离线先记录、联网后补报时填写，服务端限制在最近 24 小时内
+             */
+            startedAt?: number;
         };
         FlightConnectionVO: {
             /** Format: int64 */
@@ -3872,6 +3925,26 @@ export interface components {
             overweight?: boolean;
             serialNumber?: string;
         };
+        FlightHistoryVO: {
+            connections?: components["schemas"]["FlightConnectionVO"][];
+            hasNext?: boolean;
+            items?: components["schemas"]["FlightSampleVO"][];
+            /** Format: int64 */
+            nextCapturedAt?: number;
+            /** Format: int64 */
+            nextSampleId?: number;
+        };
+        FlightSampleBatchDTO: {
+            samples: components["schemas"]["FlightSampleDTO"][];
+        };
+        FlightSampleBatchVO: {
+            /** Format: int32 */
+            accepted?: number;
+            /** Format: int32 */
+            duplicates?: number;
+            /** Format: int32 */
+            rejected?: number;
+        };
         FlightSampleDTO: {
             /** Format: double */
             altitude?: number;
@@ -3884,6 +3957,8 @@ export interface components {
             latitude?: number;
             /** Format: double */
             longitude?: number;
+            /** Format: double */
+            payloadKg?: number;
             /** Format: int64 */
             sequence?: number;
             /** Format: double */
@@ -3902,6 +3977,8 @@ export interface components {
             latitude?: number;
             /** Format: double */
             longitude?: number;
+            /** Format: double */
+            payloadKg?: number;
             /** Format: date-time */
             receivedAt?: string;
             /** Format: int64 */
@@ -4594,6 +4671,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["FlightConnectionVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightHistoryVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightHistoryVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultFlightSampleBatchVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["FlightSampleBatchVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -7270,6 +7379,34 @@ export interface operations {
             };
         };
     };
+    history: {
+        parameters: {
+            query?: {
+                afterCapturedAt?: number;
+                afterSampleId?: number;
+                from?: number;
+                limit?: number;
+                to?: number;
+            };
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightHistoryVO"];
+                };
+            };
+        };
+    };
     track: {
         parameters: {
             query?: {
@@ -7843,6 +7980,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultFlightSampleVO"];
+                };
+            };
+        };
+    };
+    batch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlightSampleBatchDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultFlightSampleBatchVO"];
                 };
             };
         };
@@ -8550,7 +8714,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResultLiveStartVO"];
                 };
             };
-            /** @description 设备未绑定到当前飞手 */
+            /** @description 设备不是本人当前派单连机的无人机，也未绑定到当前飞手 */
             403: {
                 headers: {
                     [name: string]: unknown;
