@@ -75,7 +75,7 @@ export interface paths {
          * 派单订单分页列表
          * @description 按创建时间倒序；page 从 0 起，size 上限 100
          */
-        get: operations["list_1"];
+        get: operations["adminListDispatchOrders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -95,7 +95,7 @@ export interface paths {
          * 派单订单详情
          * @description 订单视图（含运单、账单、实际执行无人机）、参与方、状态时间线、派单记录、连机记录
          */
-        get: operations["detail"];
+        get: operations["adminGetDispatchOrder"];
         put?: never;
         post?: never;
         delete?: never;
@@ -273,6 +273,26 @@ export interface paths {
          * @description 基本信息 + 绑定无人机表（djiId、机型名、在线、可用）+ 关联订单；无人机启用/禁用复用 POST /admin/uav/available（按 deviceId=djiId 启停）
          */
         get: operations["pilotDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/provider/drones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 服务商无人机/机场分页列表
+         * @description 按登记时间倒序；page 从 0 起，size 上限 100；含已停用设备与服务商
+         */
+        get: operations["adminListProviderDrones"];
         put?: never;
         post?: never;
         delete?: never;
@@ -733,6 +753,26 @@ export interface paths {
          * @description 列出会话
          */
         get: operations["listSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/config/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取地图配置
+         * @description 返回高德 key 与 Web 安全代理地址；不返回 securityKey。响应带 Cache-Control: private
+         */
+        get: operations["getMapConfig"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3389,6 +3429,31 @@ export interface components {
             totalPages?: number;
         };
         /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminProviderDroneVO: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminProviderDroneVO"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
         AdminPageVoAdminTaskVo: {
             /** @description 当前页数据列表 */
             content?: components["schemas"]["AdminTaskVo"][];
@@ -3523,6 +3588,32 @@ export interface components {
             userId?: number;
             /** @description 用户名（昵称） */
             userName?: string;
+        };
+        /** @description 管理端服务商无人机/机场行 */
+        AdminProviderDroneVO: {
+            /** @description 机场名称 */
+            airportName?: string;
+            /** @description 是否借出中 */
+            borrowed?: boolean;
+            /**
+             * Format: date-time
+             * @description 登记时间
+             */
+            createdAt?: string;
+            /** @description 设备登记 ID */
+            droneId?: string;
+            /** @description 设备是否启用 */
+            enabled?: boolean;
+            /** @description 机场纬度 */
+            latitude?: number;
+            /** @description 机场经度 */
+            longitude?: number;
+            /** @description 机型 */
+            model?: components["schemas"]["Model"];
+            /** @description 服务商 */
+            provider?: components["schemas"]["Provider"];
+            /** @description 机身号 */
+            serialNumber?: string;
         };
         AdminStatisticsVO: {
             /** Format: int32 */
@@ -4191,6 +4282,13 @@ export interface components {
             /** @description 日志行列表（按时间顺序） */
             logs?: string[];
         };
+        /** @description 地图配置（不含 securityKey） */
+        MapConfigVO: {
+            /** @description 高德地图 key */
+            key: string;
+            /** @description Web 端高德安全代理地址（_AMapSecurityConfig.serviceHost）；未配置时为 null */
+            serviceHost?: null | string;
+        };
         MessageDTO: {
             content: string;
             /** Format: int64 */
@@ -4200,6 +4298,18 @@ export interface components {
             msgId?: string;
             /** Format: int64 */
             sessionId: number;
+        };
+        /** @description 机型 */
+        Model: {
+            /**
+             * Format: int64
+             * @description 机型 ID
+             */
+            aircraftModelId?: number;
+            /** @description 机型名称 */
+            displayName?: string;
+            /** @description 机型编码 */
+            modelCode?: string;
         };
         OrderComplaint: {
             adminNote?: string;
@@ -4259,6 +4369,18 @@ export interface components {
             orderNum?: string;
             payUrl?: string;
             prepayId?: string;
+        };
+        /** @description 服务商主体 */
+        Provider: {
+            /** @description 服务商名称 */
+            displayName?: string;
+            /** @description 服务商账号是否启用 */
+            enabled?: boolean;
+            /**
+             * Format: int64
+             * @description 服务商 ID
+             */
+            providerId?: number;
         };
         ProviderAccountPageVO: {
             hasNext?: boolean;
@@ -4456,6 +4578,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminPageVoAdminPilotVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminProviderDroneVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminProviderDroneVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -5197,6 +5335,22 @@ export interface components {
              * @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null）
              */
             data?: number;
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultMapConfigVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["MapConfigVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -6459,7 +6613,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    adminListDispatchOrders: {
         parameters: {
             query?: {
                 /** @description 关键字：订单号、货主或飞手用户名模糊匹配 */
@@ -6494,7 +6648,7 @@ export interface operations {
             };
         };
     };
-    detail: {
+    adminGetDispatchOrder: {
         parameters: {
             query?: never;
             header?: never;
@@ -6743,6 +6897,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultAdminPilotDetailVo"];
+                };
+            };
+        };
+    };
+    adminListProviderDrones: {
+        parameters: {
+            query?: {
+                /** @description 服务商 ID（正整数，否则 400） */
+                providerId?: number;
+                /** @description 机场名称，模糊匹配（最长 100 字） */
+                airportName?: string;
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminProviderDroneVO"];
                 };
             };
         };
@@ -7309,6 +7492,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getMapConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultMapConfigVO"];
                 };
             };
         };
