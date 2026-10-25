@@ -4,6 +4,75 @@
  */
 
 export interface paths {
+    "/admin/aircraft-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 机型分页列表
+         * @description 按型号代码升序；page 从 0 起，size 上限 100；含已停用机型。公开启用目录仍走 GET /api/aircraft-models
+         */
+        get: operations["adminListAircraftModels"];
+        put?: never;
+        /**
+         * 新增机型
+         * @description 型号代码全局唯一（大小写不敏感，重复 409）；默认启用；coefficient 固定为 1.000（本版不开放改口）
+         */
+        post: operations["adminCreateAircraftModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/aircraft-models/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 机型详情 */
+        get: operations["adminGetAircraftModel"];
+        /**
+         * 编辑机型
+         * @description 可改型号代码、显示名、最大载重、是否吊运；型号代码冲突 409；不改 coefficient 与 enabled
+         */
+        put: operations["adminUpdateAircraftModel"];
+        post?: never;
+        /**
+         * 删除机型
+         * @description 仅当从未被无人机、飞手资质/绑机、执飞连接或旧应征引用时可删；否则 409，提示改为停用
+         */
+        delete: operations["adminDeleteAircraftModel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/aircraft-models/{modelId}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 启用/停用机型
+         * @description 停用后登记无人机与公开目录都选不到；已引用该机型的无人机/资质/执飞记录仍照常显示
+         */
+        post: operations["adminSetAircraftModelEnabled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/complaint/list": {
         parameters: {
             query?: never;
@@ -98,6 +167,91 @@ export interface paths {
         get: operations["adminGetDispatchOrder"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 无人机分页列表
+         * @description 按登记时间倒序；page 从 0 起，size 上限 100；含已停用设备。每行含在库/已借出、执飞中与最近订单
+         */
+        get: operations["adminListDrones"];
+        put?: never;
+        /**
+         * 登记无人机
+         * @description 机型必选（aircraft_model 中存在且启用）；机身号必填、去空格转大写后全局唯一（重复 409）；机场名称与坐标必填
+         */
+        post: operations["adminCreateDrone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drones/{droneId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 无人机详情 */
+        get: operations["adminGetDrone"];
+        /**
+         * 编辑无人机
+         * @description 机场名称与坐标随时可改；借出期间或已有借还记录后不能更改机身号或机型（409），以保留设备身份历史
+         */
+        put: operations["adminUpdateDrone"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drones/{droneId}/borrows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 无人机借还记录
+         * @description 按借出时间倒序；page 从 0 起，size 上限 100
+         */
+        get: operations["adminListDroneBorrows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/drones/{droneId}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 启用/停用无人机
+         * @description 停用后飞手不可借用；正被借出的仍保留借用记录并可由原飞手归还
+         */
+        post: operations["adminSetDroneEnabled"];
         delete?: never;
         options?: never;
         head?: never;
@@ -273,26 +427,6 @@ export interface paths {
          * @description 基本信息 + 绑定无人机表（djiId、机型名、在线、可用）+ 关联订单；无人机启用/禁用复用 POST /admin/uav/available（按 deviceId=djiId 启停）
          */
         get: operations["pilotDetail"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/provider/drones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 服务商无人机/机场分页列表
-         * @description 按登记时间倒序；page 从 0 起，size 上限 100；含已停用设备与服务商
-         */
-        get: operations["adminListProviderDrones"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1647,81 +1781,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/equipment/admin/borrows": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 监管查看全部借还登记 */
-        get: operations["equipmentAdminBorrows"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/admin/drones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 监管查看全部服务商设备登记 */
-        get: operations["equipmentAdminDrones"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/admin/providers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页读取服务商账号 */
-        get: operations["equipmentProviders"];
-        put?: never;
-        /**
-         * 平台开通服务商账号
-         * @description 仅现有管理员；密码仅以BCrypt保存，响应不含密码或哈希；无公开注册入口
-         */
-        post: operations["provisionProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/admin/providers/{providerId}/enabled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 启停服务商账号
-         * @description 停用后既有令牌不能再管理设备；已借设备仍可由原飞手归还
-         */
-        post: operations["providerEnabled"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/equipment/pilot/borrows": {
         parameters: {
             query?: never;
@@ -1754,7 +1813,7 @@ export interface paths {
         put?: never;
         /**
          * 登记归还本人借用设备
-         * @description 按原借用ID归还，重复请求幂等，旧归还重试不影响后续借用；设备或服务商停用不阻止本人归还
+         * @description 按原借用ID归还，重复请求幂等，旧归还重试不影响后续借用；设备停用不阻止本人归还
          */
         post: operations["returnDrone"];
         delete?: never;
@@ -1772,127 +1831,9 @@ export interface paths {
         };
         /**
          * 分页读取可借设备目录
-         * @description 只列启用服务商、设备和机型；已借出显示不可借，不返回其他飞手的借用标识或身份
+         * @description 只列启用的设备和机型；已借出显示不可借，不返回其他飞手的借用标识或身份
          */
         get: operations["pilotEquipment"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/borrows": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 分页读取本机构借还记录
-         * @description 仅本人机构登记的设备；借还不关联订单、收费或押金
-         */
-        get: operations["providerBorrows"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/drones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页读取本机构无人机 */
-        get: operations["providerDrones"];
-        put?: never;
-        /**
-         * 登记本机构无人机
-         * @description 真实机身号全局唯一，选择现有启用机型并登记机场；不产生费用、不创建旧绑定记录
-         */
-        post: operations["registerProviderDrone"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/drones/{droneId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 修改本机构无人机登记
-         * @description 借出期间不可修改；产生借还记录后机身号和机型不可改写，以保留设备身份历史；可在归还后更新机场资料
-         */
-        put: operations["updateProviderDrone"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/drones/{droneId}/enabled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 启停本机构无人机借用
-         * @description 停用不替飞手归还已借设备，仍允许原飞手完成归还
-         */
-        post: operations["providerDroneEnabled"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 服务商登录
-         * @description 账号由平台管理员开通，无自助注册；返回独立role=3访问令牌，不可用于旧用户、监管和飞控接口
-         */
-        post: operations["providerLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/equipment/provider/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 读取本人服务商资料 */
-        get: operations["providerMe"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3211,6 +3152,46 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 管理端机型写入 */
+        AdminAircraftModelDTO: {
+            /**
+             * @description 显示名
+             * @example DJI FlyCart 30
+             */
+            displayName: string;
+            /**
+             * @description 最大载重（kg）
+             * @example 30
+             */
+            maxPayloadKg: number;
+            /**
+             * @description 型号代码，须与 djifly 连机上报一致（如 FC30）
+             * @example FC30
+             */
+            modelCode: string;
+            /** @description 是否支持吊运 */
+            transportEnabled: boolean;
+        };
+        /** @description 管理端机型 */
+        AdminAircraftModelVO: {
+            /** @description 机型系数（报价乘子；本版只读，第 4 步清理） */
+            coefficient?: number;
+            /** @description 显示名 */
+            displayName?: string;
+            /** @description 是否启用 */
+            enabled?: boolean;
+            /**
+             * Format: int64
+             * @description 机型 ID
+             */
+            id?: number;
+            /** @description 最大载重（kg） */
+            maxPayloadKg?: number;
+            /** @description 型号代码 */
+            modelCode?: string;
+            /** @description 是否支持吊运 */
+            transportEnabled?: boolean;
+        };
         /** @description 派单（接单）记录，每次重新派单 assignmentVersion 递增 */
         AdminDispatchOrderAssignment: {
             /** Format: date-time */
@@ -3283,6 +3264,63 @@ export interface components {
             /** @description 结束原因，仅 ASSIGNMENT_ENDED 可能有值 */
             reason?: string;
         };
+        /** @description 管理端无人机借还记录 */
+        AdminDroneBorrowVO: {
+            /** @description 借用记录 ID */
+            borrowId?: string;
+            /**
+             * Format: date-time
+             * @description 借出时间
+             */
+            borrowedAt?: string;
+            /** @description 无人机登记 ID */
+            droneId?: string;
+            /**
+             * Format: int64
+             * @description 借用飞手 ID
+             */
+            pilotId?: number;
+            /** @description 借用飞手用户名 */
+            pilotName?: string;
+            /**
+             * Format: date-time
+             * @description 归还时间；未归还为 null
+             */
+            returnedAt?: null | string;
+        };
+        /** @description 管理端平台租借无人机 */
+        AdminDroneVO: {
+            /** @description 机场名称 */
+            airportName?: string;
+            /**
+             * @description 借用状态：IN_STOCK 在库，BORROWED 已借出
+             * @enum {string}
+             */
+            borrowStatus?: "BORROWED" | "IN_STOCK";
+            /**
+             * Format: date-time
+             * @description 登记时间
+             */
+            createdAt?: string;
+            /** @description 当前借用（仅 BORROWED 时有值） */
+            currentBorrow?: components["schemas"]["CurrentBorrow"];
+            /** @description 无人机登记 ID */
+            droneId?: string;
+            /** @description 是否启用（停用后飞手不可借） */
+            enabled?: boolean;
+            /** @description 执飞中：有进行中（PILOT_ARRIVED / IN_TRANSIT）的派单订单 executed_serial_number 等于本机机身号 */
+            executing?: boolean;
+            /** @description 最近一笔使用本机的派单订单（按 executed_serial_number 匹配）；从未执飞为 null */
+            latestOrder?: components["schemas"]["LatestOrder"];
+            /** @description 机场纬度 */
+            latitude?: number;
+            /** @description 机场经度 */
+            longitude?: number;
+            /** @description 机型（引用 aircraft_model） */
+            model?: components["schemas"]["Model"];
+            /** @description 机身号（全局唯一，大写） */
+            serialNumber?: string;
+        };
         AdminDto: {
             name?: string;
             password?: string;
@@ -3354,9 +3392,84 @@ export interface components {
             userId?: number;
         };
         /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminAircraftModelVO: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminAircraftModelVO"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
         AdminPageVoAdminDispatchOrderRow: {
             /** @description 当前页数据列表 */
             content?: components["schemas"]["AdminDispatchOrderRow"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminDroneBorrowVO: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminDroneBorrowVO"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminDroneVO: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminDroneVO"][];
             /**
              * Format: int32
              * @description 当前页码（从 0 开始）
@@ -3407,31 +3520,6 @@ export interface components {
         AdminPageVoAdminPilotVo: {
             /** @description 当前页数据列表 */
             content?: components["schemas"]["AdminPilotVo"][];
-            /**
-             * Format: int32
-             * @description 当前页码（从 0 开始）
-             */
-            page?: number;
-            /**
-             * Format: int32
-             * @description 每页条数
-             */
-            size?: number;
-            /**
-             * Format: int64
-             * @description 总记录数
-             */
-            totalElements?: number;
-            /**
-             * Format: int32
-             * @description 总页数（由总记录数与每页条数计算）
-             */
-            totalPages?: number;
-        };
-        /** @description 管理端分页信封（page 从 0 开始） */
-        AdminPageVoAdminProviderDroneVO: {
-            /** @description 当前页数据列表 */
-            content?: components["schemas"]["AdminProviderDroneVO"][];
             /**
              * Format: int32
              * @description 当前页码（从 0 开始）
@@ -3588,32 +3676,6 @@ export interface components {
             userId?: number;
             /** @description 用户名（昵称） */
             userName?: string;
-        };
-        /** @description 管理端服务商无人机/机场行 */
-        AdminProviderDroneVO: {
-            /** @description 机场名称 */
-            airportName?: string;
-            /** @description 是否借出中 */
-            borrowed?: boolean;
-            /**
-             * Format: date-time
-             * @description 登记时间
-             */
-            createdAt?: string;
-            /** @description 设备登记 ID */
-            droneId?: string;
-            /** @description 设备是否启用 */
-            enabled?: boolean;
-            /** @description 机场纬度 */
-            latitude?: number;
-            /** @description 机场经度 */
-            longitude?: number;
-            /** @description 机型 */
-            model?: components["schemas"]["Model"];
-            /** @description 服务商 */
-            provider?: components["schemas"]["Provider"];
-            /** @description 机身号 */
-            serialNumber?: string;
         };
         AdminStatisticsVO: {
             /** Format: int32 */
@@ -3801,6 +3863,11 @@ export interface components {
             /** @description 用户名（昵称） */
             userName?: string;
         };
+        /** @description 机型启用/停用 */
+        AircraftModelEnabledDTO: {
+            /** @description true=启用，false=停用；停用后登记无人机时不可选 */
+            enabled: boolean;
+        };
         /** @description 平台机型目录项 */
         AircraftModelVO: {
             /** @description 机型系数：ADR-0003 报价公式乘子 */
@@ -3835,6 +3902,23 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        /** @description 当前借用 */
+        CurrentBorrow: {
+            /** @description 借用记录 ID */
+            borrowId?: string;
+            /**
+             * Format: date-time
+             * @description 借出时间
+             */
+            borrowedAt?: string;
+            /**
+             * Format: int64
+             * @description 借用飞手 ID
+             */
+            pilotId?: number;
+            /** @description 借用飞手用户名 */
+            pilotName?: string;
         };
         DispatchAssignmentDTO: {
             /** Format: int64 */
@@ -4246,6 +4330,18 @@ export interface components {
             /** Format: int64 */
             timestamp?: number;
         };
+        /** @description 最近使用订单（跳管理端派单订单详情 GET /admin/dispatch/orders/{orderId}） */
+        LatestOrder: {
+            /**
+             * Format: date-time
+             * @description 下单时间
+             */
+            createdAt?: string;
+            /** @description 派单订单 ID */
+            orderId?: string;
+            /** @description 订单阶段 */
+            stage?: string;
+        };
         /** @description 开播（启动图传）结果 */
         LiveStartVO: {
             /** @description 设备是否已确认启动图传（false 表示命令已发送、等待设备确认） */
@@ -4370,31 +4466,6 @@ export interface components {
             payUrl?: string;
             prepayId?: string;
         };
-        /** @description 服务商主体 */
-        Provider: {
-            /** @description 服务商名称 */
-            displayName?: string;
-            /** @description 服务商账号是否启用 */
-            enabled?: boolean;
-            /**
-             * Format: int64
-             * @description 服务商 ID
-             */
-            providerId?: number;
-        };
-        ProviderAccountPageVO: {
-            hasNext?: boolean;
-            items?: components["schemas"]["ProviderAccountVO"][];
-            /** Format: int32 */
-            page?: number;
-        };
-        ProviderAccountVO: {
-            displayName?: string;
-            enabled?: boolean;
-            /** Format: int64 */
-            providerId?: number;
-            username?: string;
-        };
         ProviderDroneDTO: {
             /** Format: int64 */
             aircraftModelId: number;
@@ -4421,23 +4492,7 @@ export interface components {
             latitude?: number;
             longitude?: number;
             modelName?: string;
-            /** Format: int64 */
-            providerId?: number;
-            providerName?: string;
             serialNumber?: string;
-        };
-        ProviderLoginDTO: {
-            password: string;
-            username: string;
-        };
-        ProviderLoginVO: {
-            provider?: components["schemas"]["ProviderAccountVO"];
-            token?: string;
-        };
-        ProviderProvisionDTO: {
-            displayName: string;
-            password: string;
-            username: string;
         };
         /** @description TRTC 拉流凭证 */
         PullCredentialsVO: {
@@ -4490,6 +4545,22 @@ export interface components {
             userName?: string;
         };
         /** @description 统一响应结果封装 */
+        ResultAdminAircraftModelVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminAircraftModelVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultAdminDispatchOrderDetail: {
             /**
              * Format: int32
@@ -4498,6 +4569,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminDispatchOrderDetail"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminDroneVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminDroneVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -4538,6 +4625,22 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminAircraftModelVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminAircraftModelVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultAdminPageVoAdminDispatchOrderRow: {
             /**
              * Format: int32
@@ -4546,6 +4649,38 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminPageVoAdminDispatchOrderRow"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminDroneBorrowVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminDroneBorrowVO"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminDroneVO: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminDroneVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -4578,22 +4713,6 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminPageVoAdminPilotVo"];
-            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
-            errorCode?: string;
-            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
-            message?: string;
-            /** @description 是否成功：true 成功 / false 失败 */
-            success?: boolean;
-        };
-        /** @description 统一响应结果封装 */
-        ResultAdminPageVoAdminProviderDroneVO: {
-            /**
-             * Format: int32
-             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
-             */
-            code?: number;
-            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
-            data?: components["schemas"]["AdminPageVoAdminProviderDroneVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -5475,38 +5594,6 @@ export interface components {
             success?: boolean;
         };
         /** @description 统一响应结果封装 */
-        ResultProviderAccountPageVO: {
-            /**
-             * Format: int32
-             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
-             */
-            code?: number;
-            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
-            data?: components["schemas"]["ProviderAccountPageVO"];
-            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
-            errorCode?: string;
-            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
-            message?: string;
-            /** @description 是否成功：true 成功 / false 失败 */
-            success?: boolean;
-        };
-        /** @description 统一响应结果封装 */
-        ResultProviderAccountVO: {
-            /**
-             * Format: int32
-             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
-             */
-            code?: number;
-            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
-            data?: components["schemas"]["ProviderAccountVO"];
-            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
-            errorCode?: string;
-            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
-            message?: string;
-            /** @description 是否成功：true 成功 / false 失败 */
-            success?: boolean;
-        };
-        /** @description 统一响应结果封装 */
         ResultProviderDronePageVO: {
             /**
              * Format: int32
@@ -5515,38 +5602,6 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["ProviderDronePageVO"];
-            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
-            errorCode?: string;
-            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
-            message?: string;
-            /** @description 是否成功：true 成功 / false 失败 */
-            success?: boolean;
-        };
-        /** @description 统一响应结果封装 */
-        ResultProviderDroneVO: {
-            /**
-             * Format: int32
-             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
-             */
-            code?: number;
-            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
-            data?: components["schemas"]["ProviderDroneVO"];
-            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
-            errorCode?: string;
-            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
-            message?: string;
-            /** @description 是否成功：true 成功 / false 失败 */
-            success?: boolean;
-        };
-        /** @description 统一响应结果封装 */
-        ResultProviderLoginVO: {
-            /**
-             * Format: int32
-             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
-             */
-            code?: number;
-            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
-            data?: components["schemas"]["ProviderLoginVO"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -6537,6 +6592,151 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    adminListAircraftModels: {
+        parameters: {
+            query?: {
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminAircraftModelVO"];
+                };
+            };
+        };
+    };
+    adminCreateAircraftModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAircraftModelDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminAircraftModelVO"];
+                };
+            };
+        };
+    };
+    adminGetAircraftModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminAircraftModelVO"];
+                };
+            };
+        };
+    };
+    adminUpdateAircraftModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAircraftModelDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminAircraftModelVO"];
+                };
+            };
+        };
+    };
+    adminDeleteAircraftModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    adminSetAircraftModelEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AircraftModelEnabledDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminAircraftModelVO"];
+                };
+            };
+        };
+    };
     listComplaints: {
         parameters: {
             query?: {
@@ -6666,6 +6866,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultAdminDispatchOrderDetail"];
+                };
+            };
+        };
+    };
+    adminListDrones: {
+        parameters: {
+            query?: {
+                /** @description 机场名称，模糊匹配（最长 100 字） */
+                airportName?: string;
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminDroneVO"];
+                };
+            };
+        };
+    };
+    adminCreateDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDroneDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminDroneVO"];
+                };
+            };
+        };
+    };
+    adminGetDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminDroneVO"];
+                };
+            };
+        };
+    };
+    adminUpdateDrone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDroneDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminDroneVO"];
+                };
+            };
+        };
+    };
+    adminListDroneBorrows: {
+        parameters: {
+            query?: {
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminDroneBorrowVO"];
+                };
+            };
+        };
+    };
+    adminSetDroneEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                droneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentEnabledDTO"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminDroneVO"];
                 };
             };
         };
@@ -6897,35 +7249,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultAdminPilotDetailVo"];
-                };
-            };
-        };
-    };
-    adminListProviderDrones: {
-        parameters: {
-            query?: {
-                /** @description 服务商 ID（正整数，否则 400） */
-                providerId?: number;
-                /** @description 机场名称，模糊匹配（最长 100 字） */
-                airportName?: string;
-                /** @description 每页条数（默认 20，上限 100） */
-                size?: number;
-                /** @description 页码（从 0 起） */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultAdminPageVoAdminProviderDroneVO"];
                 };
             };
         };
@@ -8596,122 +8919,6 @@ export interface operations {
             };
         };
     };
-    equipmentAdminBorrows: {
-        parameters: {
-            query?: {
-                page?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultDroneBorrowPageVO"];
-                };
-            };
-        };
-    };
-    equipmentAdminDrones: {
-        parameters: {
-            query?: {
-                page?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderDronePageVO"];
-                };
-            };
-        };
-    };
-    equipmentProviders: {
-        parameters: {
-            query?: {
-                page?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderAccountPageVO"];
-                };
-            };
-        };
-    };
-    provisionProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderProvisionDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderAccountVO"];
-                };
-            };
-        };
-    };
-    providerEnabled: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                providerId: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EquipmentEnabledDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderAccountVO"];
-                };
-            };
-        };
-    };
     pilotBorrows: {
         parameters: {
             query?: {
@@ -8784,7 +8991,6 @@ export interface operations {
         parameters: {
             query?: {
                 page?: string;
-                providerId?: number;
             };
             header?: never;
             path?: never;
@@ -8799,170 +9005,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultProviderDronePageVO"];
-                };
-            };
-        };
-    };
-    providerBorrows: {
-        parameters: {
-            query?: {
-                page?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultDroneBorrowPageVO"];
-                };
-            };
-        };
-    };
-    providerDrones: {
-        parameters: {
-            query?: {
-                page?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderDronePageVO"];
-                };
-            };
-        };
-    };
-    registerProviderDrone: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderDroneDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderDroneVO"];
-                };
-            };
-        };
-    };
-    updateProviderDrone: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                droneId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderDroneDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderDroneVO"];
-                };
-            };
-        };
-    };
-    providerDroneEnabled: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                droneId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EquipmentEnabledDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderDroneVO"];
-                };
-            };
-        };
-    };
-    providerLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderLoginDTO"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderLoginVO"];
-                };
-            };
-        };
-    };
-    providerMe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultProviderAccountVO"];
                 };
             };
         };
