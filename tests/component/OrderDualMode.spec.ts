@@ -312,6 +312,19 @@ describe('订单详情双模式（TASK-FRONTEND-003）', () => {
     expect(wrapper.text()).toContain('作业上下文')
   })
 
+  it('任务监管信息面板切换按钮暴露展开状态', async () => {
+    getAdminOrderDetail.mockResolvedValue(activeOrder)
+    getAdminTaskDetail.mockResolvedValue(activeTask)
+    fetchTaskLiveDetail.mockResolvedValue(liveDetailFixture)
+    const wrapper = await mountView(SuperviseView, '/orders/ORD-B/supervise')
+    const toggle = wrapper.find('button[aria-controls="supervision-context-panel"]')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('#supervision-context-panel').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('?tab=manage 定位订单管理 Tab（全屏页「查看订单管理」落点）', async () => {
     getAdminOrderDetail.mockResolvedValue(activeOrder)
     getAdminTaskDetail.mockResolvedValue(activeTask)

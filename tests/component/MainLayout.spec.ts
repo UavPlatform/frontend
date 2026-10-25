@@ -38,6 +38,7 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
     }
     setStoredSession(session)
     window.localStorage.removeItem('uav-console-tabs')
+    window.localStorage.removeItem('uav-console-sidebar-collapsed')
   })
 
   it('侧边菜单包含五项可用主导航', async () => {
@@ -88,5 +89,31 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('system')
     expect(systemItem.classes()).toContain('is-active')
+  })
+
+  it('侧边栏通过点击固定展开状态，不因鼠标离开自动收回', async () => {
+    const { wrapper } = await mountLayout()
+    const sidebar = wrapper.find('.sidebar')
+    const toggle = wrapper.find('[data-testid="sidebar-toggle"]')
+
+    expect(sidebar.classes()).toContain('is-collapsed')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(sidebar.classes()).not.toContain('is-collapsed')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(window.localStorage.getItem('uav-console-sidebar-collapsed')).toBe('false')
+
+    await sidebar.trigger('mouseleave')
+    expect(sidebar.classes()).not.toContain('is-collapsed')
+
+    await toggle.trigger('click')
+    expect(sidebar.classes()).toContain('is-collapsed')
+    expect(window.localStorage.getItem('uav-console-sidebar-collapsed')).toBe('true')
+
+    await toggle.trigger('click')
+    wrapper.unmount()
+    const { wrapper: reopened } = await mountLayout()
+    expect(reopened.find('.sidebar').classes()).not.toContain('is-collapsed')
+    reopened.unmount()
   })
 })

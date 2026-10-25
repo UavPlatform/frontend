@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   Avatar,
   Close,
   DataLine,
+  DArrowLeft,
+  DArrowRight,
   FullScreen,
   HomeFilled,
   Monitor,
@@ -145,36 +147,13 @@ const session = computed(() => getStoredSession())
 const userName = computed(() => session.value?.user.displayName ?? '管理员')
 const userRole = computed(() => (session.value?.user.role === 'ADMIN' ? '平台管理员' : '监管席位'))
 
-const collapsed = ref(true)
+const SIDEBAR_COLLAPSED_KEY = 'uav-console-sidebar-collapsed'
+const collapsed = ref(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== 'false')
 
-// 悬停展开/收回：加轻微延迟，避免「傻快」——短暂扫过不触发，移开稍停留才收回
-let sidebarEnterTimer: ReturnType<typeof setTimeout> | undefined
-let sidebarLeaveTimer: ReturnType<typeof setTimeout> | undefined
-
-const onSidebarEnter = () => {
-  if (sidebarLeaveTimer !== undefined) {
-    clearTimeout(sidebarLeaveTimer)
-    sidebarLeaveTimer = undefined
-  }
-  sidebarEnterTimer = setTimeout(() => {
-    collapsed.value = false
-  }, 150)
+const toggleSidebar = () => {
+  collapsed.value = !collapsed.value
+  window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed.value))
 }
-
-const onSidebarLeave = () => {
-  if (sidebarEnterTimer !== undefined) {
-    clearTimeout(sidebarEnterTimer)
-    sidebarEnterTimer = undefined
-  }
-  sidebarLeaveTimer = setTimeout(() => {
-    collapsed.value = true
-  }, 300)
-}
-
-onBeforeUnmount(() => {
-  if (sidebarEnterTimer !== undefined) clearTimeout(sidebarEnterTimer)
-  if (sidebarLeaveTimer !== undefined) clearTimeout(sidebarLeaveTimer)
-})
 const { isDark, toggle } = useTheme()
 
 // 全屏模式：隐藏侧边栏 + 顶栏 + 书签栏，仅保留内容区（大表格/长日志/大屏展示时用）
@@ -206,8 +185,6 @@ const handleLogout = () => {
       v-show="!fullscreen"
       class="sidebar"
       :class="{ 'is-collapsed': collapsed }"
-      @mouseenter="onSidebarEnter"
-      @mouseleave="onSidebarLeave"
     >
       <div class="sidebar__brand">
         <div class="brand-logo">
@@ -217,6 +194,17 @@ const handleLogout = () => {
           <div class="brand-title">吊运监管</div>
           <div class="brand-sub">Supervision Console</div>
         </div>
+        <button
+          class="sidebar__toggle"
+          type="button"
+          data-testid="sidebar-toggle"
+          :aria-label="collapsed ? '展开导航' : '收起导航'"
+          :aria-expanded="!collapsed"
+          :title="collapsed ? '展开导航' : '收起导航'"
+          @click="toggleSidebar"
+        >
+          <el-icon><component :is="collapsed ? DArrowRight : DArrowLeft" /></el-icon>
+        </button>
       </div>
 
       <div v-show="!collapsed" class="sidebar__section">导航</div>
@@ -339,7 +327,13 @@ const handleLogout = () => {
       </main>
     </div>
 
-    <button v-if="fullscreen" class="fullscreen-exit" type="button" @click="toggleFullscreen">
+    <button
+      v-if="fullscreen"
+      class="fullscreen-exit"
+      type="button"
+      aria-label="退出全屏"
+      @click="toggleFullscreen"
+    >
       退出全屏
       <el-icon><Close /></el-icon>
     </button>
@@ -368,10 +362,11 @@ const handleLogout = () => {
 }
 
 .sidebar.is-collapsed {
-  width: 64px;
+  width: 72px;
 }
 
 .sidebar__brand {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -380,6 +375,32 @@ const handleLogout = () => {
   flex-shrink: 0;
   border-bottom: 1px solid #1e293b;
   overflow: hidden;
+}
+
+.sidebar.is-collapsed .sidebar__brand {
+  gap: 4px;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.sidebar__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.sidebar__toggle:hover {
+  background: #1e293b;
+  color: #ffffff;
 }
 
 .brand-logo {
@@ -723,5 +744,53 @@ const handleLogout = () => {
   margin: 0 0 16px;
   font-size: 12px;
   color: var(--text-faint);
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .topbar__search {
+    width: min(248px, 34vw);
+  }
+
+  .content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sidebar {
+    width: 72px;
+  }
+
+  .sidebar:not(.is-collapsed) {
+    width: 200px;
+  }
+
+  .sidebar.is-collapsed .brand-text,
+  .sidebar.is-collapsed .sidebar__user,
+  .sidebar.is-collapsed .sidebar__logout {
+    display: none;
+  }
+
+  .topbar__crumb {
+    display: none;
+  }
+
+  .topbar__search {
+    width: min(190px, 48vw);
+  }
+
+  .topbar__duty,
+  .topbar__divider {
+    display: none;
+  }
+
+  .content {
+    padding: 12px;
+  }
 }
 </style>

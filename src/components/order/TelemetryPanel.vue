@@ -22,9 +22,13 @@ const props = defineProps<{
 
 const TELEMETRY_POLL_MS = 10_000
 const STARTED_AT_MAX_TRIES = 3
+const TELEMETRY_STALE_MS = 30_000
+const TELEMETRY_MISSES_BEFORE_STALE = 3
 
 const telemetry = ref<TelemetrySummary | null>()
 const loading = ref(false)
+const now = ref(Date.now())
+const consecutiveMisses = ref(0)
 
 let requestSeq = 0
 let disposed = false
@@ -50,7 +54,11 @@ const refresh = async () => {
   try {
     if (!deviceId) {
       const result = await fetchOrderTelemetry(orderNum)
-      if (!disposed && seq === requestSeq) telemetry.value = result ?? null
+      if (!disposed && seq === requestSeq) {
+        telemetry.value = result ?? null
+        consecutiveMisses.value = 0
+        now.value = Date.now()
+      }
       return
     }
     let startedAt = startedAtByOrder.get(orderNum)
@@ -65,7 +73,21 @@ const refresh = async () => {
       }
     }
     const result = await fetchOrderPosition(deviceId, startedAt)
-    if (!disposed && seq === requestSeq) telemetry.value = result ?? null
+    if (!disposed && seq === requestSeq) {
+      now.value = Date.now()
+      if (result) {
+        telemetry.value = result
+        consecutiveMisses.value = 0
+      } else if (telemetry.value) {
+        // 保留最后一次成功数据，短暂网络抖动不应把页面清成空态。
+        consecutiveMisses.value = Math.min(
+          TELEMETRY_MISSES_BEFORE_STALE,
+          consecutiveMisses.value + 1,
+        )
+      } else {
+        telemetry.value = null
+      }
+    }
   } finally {
     if (!disposed && seq === requestSeq) { loading.value = false; inFlightKey = '' }
   }
@@ -100,6 +122,15 @@ const metrics = computed(() => {
 
 const empty = computed(() => !loading.value && telemetry.value === null)
 const noDevice = computed(() => props.deviceId === null || props.deviceId === '')
+const stale = computed(() => {
+  const reportedAt = telemetry.value?.reportedAt
+  const age = reportedAt == null ? 0 : now.value - reportedAt
+  return Boolean(
+    telemetry.value &&
+      (consecutiveMisses.value >= TELEMETRY_MISSES_BEFORE_STALE ||
+        (reportedAt != null && age >= TELEMETRY_STALE_MS)),
+  )
+})
 
 let pollTimer: ReturnType<typeof setInterval> | undefined
 const stopPolling = () => {
@@ -122,6 +153,8 @@ watch(
     })
     stopPolling()
     telemetry.value = undefined
+    consecutiveMisses.value = 0
+    now.value = Date.now()
     if (deviceId === undefined) return
     await refresh()
     if (active && !disposed && props.orderNum && deviceId) {
@@ -146,12 +179,17 @@ onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
     <div v-if="empty && noDevice" class="empty-note">该任务暂无作业设备，无可读取的实时遥测</div>
     <div v-else-if="empty" class="empty-note">遥测暂无数据（等待设备上报）</div>
 
-    <div v-else class="metric-grid mt-3">
-      <div v-for="item in metrics" :key="item.label" class="metric-cell">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
+    <template v-else>
+      <div v-if="stale" class="stale-note" role="status">
+        信号中断，显示最后一次上报数据
       </div>
-    </div>
+      <div class="metric-grid mt-3">
+        <div v-for="item in metrics" :key="item.label" class="metric-cell">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </div>
+    </template>
   </section>
 </template>
 
@@ -170,6 +208,16 @@ onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
   background: var(--bg-sunken);
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.stale-note {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-sunken));
+  color: var(--warning);
+  font-size: 0.85rem;
 }
 
 .metric-grid {

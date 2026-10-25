@@ -170,6 +170,66 @@ describe('supervision request lifecycles', () => {
     wrapper.unmount()
   })
 
+  it('keeps the last successful telemetry during a transient empty response', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    fetchOrderStartedAt.mockResolvedValue(1_000)
+    fetchOrderPosition
+      .mockResolvedValueOnce({ altitude: 80, reportedAt: Date.now() })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ altitude: 81, reportedAt: Date.now() + 10_000 })
+    const wrapper = mount(TelemetryPanel, {
+      props: { orderNum: 'A', deviceId: 'D1' },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('80.0 m')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(wrapper.text()).toContain('80.0 m')
+    expect(wrapper.text()).not.toContain('信号中断')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(wrapper.text()).toContain('81.0 m')
+    expect(wrapper.text()).not.toContain('信号中断')
+    wrapper.unmount()
+  })
+
+  it('shows an interruption after three consecutive missing position responses', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    fetchOrderStartedAt.mockResolvedValue(1_000)
+    fetchOrderPosition
+      .mockResolvedValueOnce({ altitude: 80, reportedAt: Date.now() })
+      .mockResolvedValue(null)
+    const wrapper = mount(TelemetryPanel, {
+      props: { orderNum: 'A', deviceId: 'D1' },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(wrapper.text()).toContain('信号中断，显示最后一次上报数据')
+    expect(wrapper.text()).toContain('80.0 m')
+    wrapper.unmount()
+  })
+
+  it('does not treat a missing report timestamp as an immediate interruption', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    fetchOrderStartedAt.mockResolvedValue(1_000)
+    fetchOrderPosition
+      .mockResolvedValueOnce({ altitude: 80 })
+      .mockResolvedValue(null)
+    const wrapper = mount(TelemetryPanel, {
+      props: { orderNum: 'A', deviceId: 'D1' },
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('信号中断')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(wrapper.text()).not.toContain('信号中断')
+    wrapper.unmount()
+  })
+
   it('does not let a late trajectory overwrite the next order start time', async () => {
     const old = deferred<number>()
     fetchOrderStartedAt.mockReturnValueOnce(old.promise).mockResolvedValueOnce(9_000)
