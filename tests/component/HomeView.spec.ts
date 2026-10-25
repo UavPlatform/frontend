@@ -293,6 +293,55 @@ describe('首页看板（TASK-FRONTEND-002）', () => {
     expect(getUavPosition).toHaveBeenCalledTimes(2)
   })
 
+  it('飞行卡在短暂空响应时保留最后一次成功遥测', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    getUavPosition
+      .mockResolvedValueOnce({ altitude: 45.5, speed: 7.2, battery: 75, timestamp: Date.now() })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ altitude: 46, speed: 7.4, battery: 74, timestamp: Date.now() + 10_000 })
+
+    const local = mount(HomeView, { global: { plugins: [router, ElementPlus] } })
+    await flushPromises()
+    expect(local.text()).toContain('高度 45.5 m')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(local.text()).toContain('高度 45.5 m')
+    expect(local.text()).not.toContain('信号中断')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(local.text()).toContain('高度 46.0 m')
+    expect(local.text()).not.toContain('信号中断')
+    local.unmount()
+  })
+
+  it('飞行卡连续三次没有新位置时标记信号中断', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    getUavPosition
+      .mockResolvedValueOnce({ altitude: 45.5, speed: 7.2, battery: 75, timestamp: Date.now() })
+      .mockResolvedValue(null)
+
+    const local = mount(HomeView, { global: { plugins: [router, ElementPlus] } })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(local.text()).toContain('信号中断 · 高度 45.5 m')
+    local.unmount()
+  })
+
+  it('飞行卡将超过 30 秒的最后上报标记为信号中断', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    getUavPosition.mockResolvedValue({
+      altitude: 45.5,
+      speed: 7.2,
+      battery: 75,
+      timestamp: Date.now() - 31_000,
+    })
+
+    const local = mount(HomeView, { global: { plugins: [router, ElementPlus] } })
+    await flushPromises()
+    expect(local.text()).toContain('信号中断 · 高度 45.5 m')
+    local.unmount()
+  })
+
   it('刚起飞轨迹为空时重试数次后停止拉整条轨迹', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     getOrderTrajectory.mockResolvedValue([])

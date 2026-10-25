@@ -39,6 +39,8 @@ const router = useRouter()
 interface FlyingCard {
   task: AdminTaskVo
   telemetry?: TelemetrySummary
+  /** 连续轮询没有新点位的次数；短暂空响应不清空最后一次成功数据 */
+  telemetryMisses?: number
   /** 起飞时间（首帧轨迹首点，ms）：位置接口只给最新一点，推不出已飞时长 */
   startedAt?: number | null
   /** 轨迹起点探测次数；刚起飞时轨迹可能还是空，限次重试后不再拉整条轨迹 */
@@ -62,6 +64,8 @@ const COMPLAINT_REASON_LABELS: Record<string, string> = {
 const TELEMETRY_POLL_MS = 10_000
 /** 起飞时间探测上限（刚起飞时轨迹可能为空）：之后只轮询位置，不再拉整条轨迹 */
 const STARTED_AT_MAX_TRIES = 3
+const TELEMETRY_MISSES_BEFORE_STALE = 3
+const TELEMETRY_STALE_MS = 30_000
 
 const loading = ref(false)
 const loadError = ref('')
@@ -178,7 +182,13 @@ const telemetrySummary = (card: FlyingCard) => {
     telemetry.startedAt ? `已飞 ${formatDuration(Date.now() - telemetry.startedAt)}` : '',
     telemetry.reportedAt ? `上报 ${formatClock(new Date(telemetry.reportedAt))}` : '',
   ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : '等待设备上报'
+  const summary = parts.length > 0 ? parts.join(' · ') : '等待设备上报'
+  const reportedAt = telemetry.reportedAt
+  const timestampStale = reportedAt != null && Date.now() - reportedAt >= TELEMETRY_STALE_MS
+  return timestampStale ||
+    (card.telemetryMisses ?? 0) >= TELEMETRY_MISSES_BEFORE_STALE
+    ? `信号中断 · ${summary}`
+    : summary
 }
 
 /**
@@ -208,14 +218,39 @@ const refreshTelemetry = (): Promise<void> => {
         }
         const point = await getUavPosition(deviceId)
         if (!disposed && flyingCards.value === cards) {
-          card.telemetry = summarizePosition(point, card.startedAt ?? undefined)
+          const summary = summarizePosition(point, card.startedAt ?? undefined)
+          if (summary) {
+            card.telemetry = summary
+            card.telemetryMisses = 0
+          } else if (card.telemetry) {
+            card.telemetryMisses = Math.min(
+              TELEMETRY_MISSES_BEFORE_STALE,
+              (card.telemetryMisses ?? 0) + 1,
+            )
+          }
         }
         return
       }
       const points = await getOrderTrajectory(orderNum)
-      if (!disposed && flyingCards.value === cards) card.telemetry = summarizeTrajectory(points)
+      if (!disposed && flyingCards.value === cards) {
+        const summary = summarizeTrajectory(points)
+        if (summary) {
+          card.telemetry = summary
+          card.telemetryMisses = 0
+        } else if (card.telemetry) {
+          card.telemetryMisses = Math.min(
+            TELEMETRY_MISSES_BEFORE_STALE,
+            (card.telemetryMisses ?? 0) + 1,
+          )
+        }
+      }
     } catch {
-      if (!disposed && flyingCards.value === cards) card.telemetry = undefined
+      if (!disposed && flyingCards.value === cards && card.telemetry) {
+        card.telemetryMisses = Math.min(
+          TELEMETRY_MISSES_BEFORE_STALE,
+          (card.telemetryMisses ?? 0) + 1,
+        )
+      }
     }
   }).finally(() => { telemetryInFlight = undefined })
   return telemetryInFlight

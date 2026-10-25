@@ -87,7 +87,11 @@ const openManage = () => {
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <el-button @click="panelCollapsed = !panelCollapsed">
+            <el-button
+              :aria-expanded="String(!panelCollapsed)"
+              aria-controls="supervision-context-panel"
+              @click="panelCollapsed = !panelCollapsed"
+            >
               {{ panelCollapsed ? '展开信息面板' : '收起信息面板' }}
             </el-button>
             <el-button type="primary" @click="openManage">查看订单管理</el-button>
@@ -98,7 +102,11 @@ const openManage = () => {
         <div class="mt-4 grid gap-4" :class="panelCollapsed ? '' : 'xl:grid-cols-[minmax(0,68fr)_minmax(0,32fr)]'">
           <LiveStage :live-detail="liveDetail" :device-id="deviceId" @live-state="liveState = $event" />
 
-          <aside v-if="!panelCollapsed" class="flex flex-col gap-4">
+          <aside
+            v-if="!panelCollapsed"
+            id="supervision-context-panel"
+            class="flex flex-col gap-4"
+          >
             <section class="panel-card context-panel p-4">
               <div class="panel-title">作业上下文</div>
               <div class="mt-3 flex flex-col gap-2">
