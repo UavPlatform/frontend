@@ -81,17 +81,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/AdminLoginView.vue'),
   },
   {
-    path: '/provider/login',
-    name: 'provider-login',
-    component: () => import('../views/ProviderLoginView.vue'),
-  },
-  {
-    path: '/provider/workspace',
-    name: 'provider-workspace',
-    component: () => import('../views/ProviderWorkspaceView.vue'),
-    meta: { requiresAuth: true, requiresProvider: true },
-  },
-  {
     // 旧书签（/records、/operate/:deviceId、/admin/center 等）回落首页
     path: '/:pathMatch(.*)*',
     redirect: { name: 'home' },
@@ -107,29 +96,20 @@ router.beforeEach((to) => {
   const authed = hasSessionToken()
   const role = getStoredSession()?.user?.role
   const isAdmin = role === 'ADMIN'
-  const isProvider = role === 'PROVIDER'
 
   if (to.meta.requiresAuth && !authed) {
     return {
-      name: to.meta.requiresProvider ? 'provider-login' : 'admin-login',
+      name: 'admin-login',
       query: { redirect: to.fullPath },
     }
   }
 
   if (to.meta.requiresAdmin && !isAdmin) {
-    return isProvider ? { name: 'provider-workspace' } : { name: 'admin-login' }
-  }
-
-  if (to.meta.requiresProvider && !isProvider) {
-    return isAdmin ? { name: 'home' } : { name: 'provider-login' }
+    return { name: 'admin-login' }
   }
 
   if (to.name === 'admin-login' && authed && isAdmin) {
     return { name: 'home' }
-  }
-
-  if (to.name === 'provider-login' && authed) {
-    return isProvider ? { name: 'provider-workspace' } : isAdmin ? { name: 'home' } : true
   }
 
   return true

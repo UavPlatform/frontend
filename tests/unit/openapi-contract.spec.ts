@@ -56,14 +56,6 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['get', '/dispatch/orders/{orderId}/flight'],
   ['get', '/dispatch/orders/{orderId}/flight/history'],
   ['get', '/dispatch/orders/{orderId}/flight/track'],
-  ['get', '/api/aircraft-models'],
-  ['get', '/equipment/provider/me'],
-  ['get', '/equipment/provider/drones'],
-  ['post', '/equipment/provider/drones'],
-  ['put', '/equipment/provider/drones/{droneId}'],
-  ['post', '/equipment/provider/drones/{droneId}/enabled'],
-  ['get', '/equipment/provider/borrows'],
-  ['post', '/equipment/provider/login'],
 ]
 
 /** 门面自身与其运行时底座：这两个文件允许出现路径字面量与 axios 实例调用 */
