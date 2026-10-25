@@ -76,3 +76,15 @@ export type AdminDispatchOrderConnection = Schemas['AdminDispatchOrderConnection
 
 /** 契约 DispatchOrderVO（详情内嵌） */
 export type DispatchOrderVo = Schemas['DispatchOrderVO']
+
+/** 契约 AdminAircraftModelVO：GET /admin/aircraft-models */
+export type AdminAircraftModelVo = Schemas['AdminAircraftModelVO']
+
+/** 契约 AdminDroneVO：GET /admin/drones */
+export type AdminDroneVo = Schemas['AdminDroneVO']
+
+/** 契约 AdminDroneBorrowVO：GET /admin/drones/{droneId}/borrows */
+export type AdminDroneBorrowVo = Schemas['AdminDroneBorrowVO']
+
+/** 契约 ProviderDroneDTO：POST/PUT /admin/drones 请求体 */
+export type AdminDroneWriteDto = Schemas['ProviderDroneDTO']

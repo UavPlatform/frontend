@@ -10,6 +10,8 @@ const shellRoutes: Array<[path: string, name: string]> = [
   ['/orders', 'orders'],
   ['/users', 'users'],
   ['/pilots', 'pilots'],
+  ['/drones', 'drones'],
+  ['/aircraft-models', 'aircraft-models'],
   ['/system', 'system'],
 ]
 

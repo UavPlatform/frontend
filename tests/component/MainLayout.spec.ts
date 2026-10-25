@@ -14,6 +14,8 @@ const routes = [
   { path: '/orders', name: 'orders', component: { template: '<div />' } },
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
+  { path: '/drones', name: 'drones', component: { template: '<div />' } },
+  { path: '/aircraft-models', name: 'aircraft-models', component: { template: '<div />' } },
   { path: '/system', name: 'system', component: { template: '<div />' } },
 ]
 
@@ -51,6 +53,8 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
         'menu-orders',
         'menu-users',
         'menu-pilots',
+        'menu-drones',
+        'menu-aircraft-models',
         'menu-system',
       ]),
     )
@@ -71,6 +75,12 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
 
     await clickMenu('menu-pilots')
     expect(router.currentRoute.value.name).toBe('pilots')
+
+    await clickMenu('menu-drones')
+    expect(router.currentRoute.value.name).toBe('drones')
+
+    await clickMenu('menu-aircraft-models')
+    expect(router.currentRoute.value.name).toBe('aircraft-models')
 
     await clickMenu('menu-orders')
     expect(router.currentRoute.value.name).toBe('orders')
