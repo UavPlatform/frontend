@@ -111,7 +111,9 @@ request.interceptors.response.use(
     const body = error.response?.data
 
     if (status === 401 && error.config) {
-      if (error.config.url === '/admin/login') return Promise.reject(error)
+      if (error.config.url === '/admin/login' || error.config.url === '/equipment/provider/login') {
+        return Promise.reject(error)
+      }
       if (!error.config._authRetried) {
         const sessionBeforeRefresh = getStoredSession()
         const newToken = await refreshAccessTokenOnce()

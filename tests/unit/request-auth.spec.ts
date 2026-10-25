@@ -172,6 +172,12 @@ describe('request.ts 401 刷新链（WEB P1-11 / 1A-6d）', () => {
     expect(routerReplace).not.toHaveBeenCalled()
   })
 
+  it('服务商登录请求 401 不触发已登录会话的过期处理', async () => {
+    await expect(responseErrorHandler(buildError(401, { url: '/equipment/provider/login' }))).rejects.toBeDefined()
+    expect(rawPost).not.toHaveBeenCalled()
+    expect(routerReplace).not.toHaveBeenCalled()
+  })
+
   it('退出后晚返回的刷新请求不能恢复会话', async () => {
     setStoredSession(buildSession())
     let complete!: (value: unknown) => void
