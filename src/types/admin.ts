@@ -58,3 +58,21 @@ export type AdminPilotDroneVo = Schemas['AdminPilotDroneVo']
 
 /** 契约 AdminPilotDetailVo：GET /admin/pilots/{userId}（绑定无人机 + 关联订单） */
 export type AdminPilotDetailVo = Schemas['AdminPilotDetailVo']
+
+/** 契约 AdminDispatchOrderRow：GET /admin/dispatch/orders */
+export type AdminDispatchOrderRow = Schemas['AdminDispatchOrderRow']
+
+/** 契约 AdminDispatchOrderDetail：GET /admin/dispatch/orders/{orderId} */
+export type AdminDispatchOrderDetail = Schemas['AdminDispatchOrderDetail']
+
+/** 契约 AdminDispatchOrderTimelineEvent */
+export type AdminDispatchOrderTimelineEvent = Schemas['AdminDispatchOrderTimelineEvent']
+
+/** 契约 AdminDispatchOrderAssignment */
+export type AdminDispatchOrderAssignment = Schemas['AdminDispatchOrderAssignment']
+
+/** 契约 AdminDispatchOrderConnection */
+export type AdminDispatchOrderConnection = Schemas['AdminDispatchOrderConnection']
+
+/** 契约 DispatchOrderVO（详情内嵌） */
+export type DispatchOrderVo = Schemas['DispatchOrderVO']

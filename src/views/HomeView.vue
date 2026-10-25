@@ -17,10 +17,10 @@ import { ElMessage } from 'element-plus'
 import { forEachConcurrent } from '../utils/concurrency'
 import MainLayout from '../layouts/MainLayout.vue'
 import { getAdminComplaints, getAdminPilots } from '../api/modules/admin-query'
-import { scanInProgressTasks, scanOrders } from '../api/modules/admin-scan'
+import { getAdminDispatchOrders } from '../api/modules/admin-dispatch'
 import { getOrderTrajectory, getUavPosition } from '../api/modules/uav'
-import type { AdminComplaint, AdminOrderVo, AdminTaskVo } from '../types/admin'
-import { formatClock, formatDateTime, formatDuration } from '../utils/date'
+import type { AdminComplaint, AdminDispatchOrderRow } from '../types/admin'
+import { formatClock, formatDuration } from '../utils/date'
 import {
   summarizePosition,
   summarizeTrajectory,
@@ -37,13 +37,11 @@ import {
 const router = useRouter()
 
 interface FlyingCard {
-  task: AdminTaskVo
+  order: AdminDispatchOrderRow
   telemetry?: TelemetrySummary
   /** 连续轮询没有新点位的次数；短暂空响应不清空最后一次成功数据 */
   telemetryMisses?: number
-  /** 起飞时间（首帧轨迹首点，ms）：位置接口只给最新一点，推不出已飞时长 */
   startedAt?: number | null
-  /** 轨迹起点探测次数；刚起飞时轨迹可能还是空，限次重试后不再拉整条轨迹 */
   startedAtTries?: number
 }
 
@@ -75,11 +73,11 @@ const flyingTotal = ref<number>()
 let disposed = false
 const updatedAt = ref('--:--:--')
 const flyingCards = ref<FlyingCard[] | undefined>(undefined)
-const todayOrders = ref<AdminOrderVo[] | undefined>(undefined)
+const todayOrders = ref<AdminDispatchOrderRow[] | undefined>(undefined)
 const pendingComplaintTotal = ref<number | undefined>(undefined)
 const pendingComplaints = ref<AdminComplaint[]>([])
 const registeredRiders = ref<number | undefined>(undefined)
-const overdueWaiting = ref<{ total: number; example?: AdminOrderVo } | undefined>(undefined)
+const overdueWaiting = ref<{ total: number; example?: AdminDispatchOrderRow } | undefined>(undefined)
 
 /** 路由跳转（守卫重定向/重复导航的失败对用户无意义，静默忽略） */
 const go = (to: RouteLocationRaw) => {
@@ -154,11 +152,11 @@ const todos = computed<TodoItem[]>(() => {
     items.push({
       key: 'overdue',
       title: `${overdueWaiting.value?.total} 单创建超 24 小时且待验收`,
-      detail: example?.orderNum
-        ? `例 ${example.orderNum} · 创建于 ${example.createTime ?? '—'}`
+      detail: example?.orderId
+        ? `例 ${example.orderId} · 创建于 ${example.createdAt ?? '—'}`
         : '创建超 24 小时仍未确认完成',
-      to: example?.orderNum
-        ? { name: 'order-detail', params: { orderNum: example.orderNum } }
+      to: example?.orderId
+        ? { name: 'order-detail', params: { orderNum: example.orderId } }
         : { name: 'orders', query: { status: '5' } },
     })
   }
@@ -168,7 +166,20 @@ const todos = computed<TodoItem[]>(() => {
 
 const todayTop5 = computed(() => (todayOrders.value ?? []).slice(0, 5))
 
-const orderStatusLabel = (order: AdminOrderVo) => order.orderStatusDesc || order.orderStatus || '—'
+const orderStatusLabel = (order: AdminDispatchOrderRow) => {
+  const stage = order.stage ?? ''
+  const map: Record<string, string> = {
+    AWAITING_DEPOSIT: '待付定金',
+    WAITING_ACCEPTANCE: '等待接单',
+    PILOT_PREPARING: '飞手准备中',
+    PILOT_ARRIVED: '飞手到场',
+    IN_TRANSIT: '运输中',
+    DELIVERY_CONFIRMATION: '送达确认中',
+    COMPLETED: '已结单',
+    CANCELLED: '已取消',
+  }
+  return map[stage] || stage || '—'
+}
 
 const telemetrySummary = (card: FlyingCard) => {
   const telemetry = card.telemetry
@@ -203,10 +214,10 @@ const refreshTelemetry = (): Promise<void> => {
   const cards = flyingCards.value ?? []
   telemetryInFlight = forEachConcurrent(cards, 4, async (card) => {
     if (disposed) return
-    const orderNum = card.task.orderNum
+    const orderNum = card.order.orderId
     if (!orderNum) return
     try {
-      const deviceId = card.task.deviceId
+      const deviceId = card.order.executedSerialNumber
       if (deviceId) {
         if (card.startedAt === undefined && (card.startedAtTries ?? 0) < STARTED_AT_MAX_TRIES) {
           card.startedAtTries = (card.startedAtTries ?? 0) + 1
@@ -266,7 +277,7 @@ const stopPolling = () => {
 
 const startPolling = () => {
   stopPolling()
-  const hasTrackable = (flyingCards.value ?? []).some((card) => card.task.orderNum)
+  const hasTrackable = (flyingCards.value ?? []).some((card) => card.order.orderId)
   if (hasTrackable) {
     telemetryTimer = setInterval(() => {
       void refreshTelemetry()
@@ -285,39 +296,36 @@ const load = async () => {
   try {
     const midnight = new Date()
     midnight.setHours(0, 0, 0, 0)
-    const overdueCutoff = formatDateTime(new Date(Date.now() - 24 * 3_600_000))
 
-    const [inProgress, todayScan, complaints, riders, waitingScan] = await Promise.all([
-      scanInProgressTasks(),
-      scanOrders({ cutoff: formatDateTime(midnight), pageSize: 100, maxPages: 5 }),
-      // 以下三项失败不阻断看板：对应指标显示「—」或折叠待办
+    const [inProgress, todayPage, complaints, riders, waitingPage] = await Promise.all([
+      getAdminDispatchOrders({ page: 0, size: 100, stage: 'IN_TRANSIT' }),
+      getAdminDispatchOrders({ page: 0, size: 5, createdFrom: midnight.toISOString() }),
       getAdminComplaints({ page: 0, size: 10, status: 'PENDING' }).catch(() => null),
       getAdminPilots({ page: 0, size: 1 }).catch(() => null),
-      scanOrders({ status: '5', cutoff: overdueCutoff, pageSize: 100, maxPages: 5 }).catch(
-        () => null,
-      ),
+      getAdminDispatchOrders({
+        page: 0,
+        size: 5,
+        stage: 'DELIVERY_CONFIRMATION',
+        createdTo: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      }).catch(() => null),
     ])
     if (seq !== loadSeq) return
 
-    flyingCards.value = inProgress.rows
-      .filter((task) => task.taskStatus === 'IN_PROGRESS')
-      .map((task) => ({ task }))
-    flyingTotal.value = inProgress.totalElements
-    todayTruncated.value = todayScan.truncated
-    scanTruncated.value = inProgress.truncated || todayScan.truncated
-    todayOrders.value = todayScan.rows
+    flyingCards.value = (inProgress.content ?? []).map((order) => ({ order }))
+    flyingTotal.value = inProgress.totalElements ?? flyingCards.value.length
+    todayTruncated.value = (todayPage.totalElements ?? 0) > (todayPage.content?.length ?? 0)
+    scanTruncated.value = false
+    todayOrders.value = todayPage.content ?? []
     pendingComplaints.value = complaints?.complaints ?? []
     pendingComplaintTotal.value = complaints
       ? complaints.totalElements ?? pendingComplaints.value.length
       : undefined
     registeredRiders.value = riders?.totalElements
-    overdueWaiting.value = waitingScan
-      ? waitingScan.truncated
-        ? undefined
-        : {
-            total: Math.max(0, waitingScan.totalElements - waitingScan.rows.length),
-            example: waitingScan.firstExcluded,
-          }
+    overdueWaiting.value = waitingPage
+      ? {
+          total: Math.max(0, (waitingPage.totalElements ?? 0) - (waitingPage.content?.length ?? 0)),
+          example: waitingPage.content?.[0],
+        }
       : undefined
 
     await refreshTelemetry()
@@ -402,21 +410,21 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
               <template #default="{ row }">
                 <div class="order-cell">
                   <span class="live-dot live-dot--sm"></span>
-                  <span class="order-num tabular-nums">{{ row.task.orderNum || '暂无订单号' }}</span>
+                  <span class="order-num tabular-nums">{{ row.order.orderId || '暂无订单号' }}</span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="任务" min-width="140" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.task.taskName || '—' }}</template>
+            <el-table-column label="执行机型" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.order.executedModelName || '—' }}</template>
             </el-table-column>
             <el-table-column label="用户" min-width="90">
               <template #default="{ row }">
                 <button
                   type="button"
                   class="link"
-                  @click="go({ name: 'users', query: row.task.userId ? { id: String(row.task.userId) } : {} })"
+                  @click="go({ name: 'users', query: row.order.shipper?.userId ? { id: String(row.order.shipper?.userId) } : {} })"
                 >
-                  {{ row.task.ownerName || '—' }}
+                  {{ row.order.shipper?.userName || '—' }}
                 </button>
               </template>
             </el-table-column>
@@ -425,15 +433,15 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
                 <button
                   type="button"
                   class="link"
-                  @click="go({ name: 'pilots', query: row.task.riderName ? { q: row.task.riderName } : {} })"
+                  @click="go({ name: 'pilots', query: row.order.pilot?.userName ? { q: row.order.pilot?.userName } : {} })"
                 >
-                  {{ row.task.riderName || '—' }}
+                  {{ row.order.pilot?.userName || '—' }}
                 </button>
               </template>
             </el-table-column>
-            <el-table-column label="金额" width="110" align="right">
+            <el-table-column label="定金" width="110" align="right">
               <template #default="{ row }">
-                <span class="amount tabular-nums">{{ formatAmount(row.task.totalAmount) }}</span>
+                <span class="amount tabular-nums">{{ formatAmount(row.order.depositAmount) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="遥测" min-width="190">
@@ -446,19 +454,19 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
             <el-table-column label="操作" width="132" fixed="right">
               <template #default="{ row }">
                 <el-button
-                  v-if="row.task.orderNum"
+                  v-if="row.order.orderId"
                   size="small"
                   type="primary"
                   link
-                  @click="go({ name: 'order-supervise', params: { orderNum: row.task.orderNum } })"
+                  @click="go({ name: 'order-supervise', params: { orderNum: row.order.orderId } })"
                 >
                   监管
                 </el-button>
                 <el-button
-                  v-if="row.task.orderNum"
+                  v-if="row.order.orderId"
                   size="small"
                   link
-                  @click="openOrderDetail(row.task.orderNum)"
+                  @click="openOrderDetail(row.order.orderId)"
                 >
                   详情
                 </el-button>
@@ -530,17 +538,17 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
             <el-icon class="ml-1"><ArrowRight /></el-icon>
           </button>
         </div>
-        <el-table :data="todayTop5" size="small" data-testid="today-table" @row-click="(row: AdminOrderVo) => openOrderDetail(row.orderNum)">
-          <el-table-column prop="orderNum" label="订单号" min-width="150" />
-          <el-table-column prop="ownerName" label="用户" min-width="90" />
+        <el-table :data="todayTop5" size="small" data-testid="today-table" @row-click="(row: AdminDispatchOrderRow) => openOrderDetail(row.orderId)">
+          <el-table-column prop="orderId" label="订单号" min-width="150" />
+          <el-table-column label="货主" min-width="90"><template #default="{ row }">{{ row.shipper?.userName || '—' }}</template></el-table-column>
           <el-table-column label="状态" width="120">
             <template #default="scope">
               {{ orderStatusLabel(scope.row) }}
             </template>
           </el-table-column>
-          <el-table-column label="金额" width="110" align="right">
+          <el-table-column label="定金" width="110" align="right">
             <template #default="scope">
-              <span class="amount tabular-nums">{{ formatAmount(scope.row.totalAmount) }}</span>
+              <span class="amount tabular-nums">{{ formatAmount(scope.row.depositAmount) }}</span>
             </template>
           </el-table-column>
         </el-table>
