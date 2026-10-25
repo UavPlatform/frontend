@@ -34,6 +34,7 @@ const loading = ref(false)
 const modelOptions = ref<AdminAircraftModelVo[]>([])
 const dialogVisible = ref(false)
 const saving = ref(false)
+const saveError = ref('')
 const editing = ref<AdminDroneVo | null>(null)
 const form = reactive({
   aircraftModelId: undefined as number | undefined,
@@ -82,6 +83,13 @@ const currentDisabledModel = computed(() => {
   if (enabledModels.value.some((m) => m.id === id)) return null
   return model
 })
+
+/** VO 已标明正被借出时可锁定机身号/机型；历史借还无字段，靠保存失败把后端文案展示在对话框内 */
+const identityLocked = computed(
+  () =>
+    editing.value != null &&
+    (editing.value.borrowStatus === 'BORROWED' || editing.value.currentBorrow != null),
+)
 
 let loadSeq = 0
 const load = async () => {
@@ -132,6 +140,7 @@ const resetFilters = () => {
 
 const openCreate = async () => {
   editing.value = null
+  saveError.value = ''
   form.aircraftModelId = undefined
   form.serialNumber = ''
   form.airportName = ''
@@ -143,6 +152,7 @@ const openCreate = async () => {
 
 const openEdit = async (row: AdminDroneVo) => {
   editing.value = row
+  saveError.value = ''
   form.aircraftModelId = row.model?.aircraftModelId
   form.serialNumber = row.serialNumber ?? ''
   form.airportName = row.airportName ?? ''
@@ -174,6 +184,7 @@ const save = async () => {
     return
   }
   saving.value = true
+  saveError.value = ''
   try {
     const body = buildBody()
     if (editing.value?.droneId) {
@@ -186,7 +197,10 @@ const save = async () => {
     dialogVisible.value = false
     await load()
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '保存无人机失败')
+    // 借还记录导致机身号/机型不可改等冲突，把后端 message 留在对话框内，避免只闪一下 toast
+    const message = err instanceof Error ? err.message : '保存无人机失败'
+    saveError.value = message
+    ElMessage.error(message)
   } finally {
     saving.value = false
   }
@@ -385,6 +399,24 @@ watch(
       width="520px"
       destroy-on-close
     >
+      <el-alert
+        v-if="saveError"
+        :title="saveError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="mb-3"
+        data-testid="drone-save-error"
+      />
+      <el-alert
+        v-if="identityLocked"
+        title="该机正被借出，机身号与机型不可更改（机场信息仍可改）"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb-3"
+        data-testid="drone-identity-locked"
+      />
       <el-form label-width="110px">
         <el-form-item label="机型" required>
           <el-select
@@ -392,6 +424,7 @@ watch(
             class="!w-full"
             filterable
             placeholder="选择启用中的机型"
+            :disabled="identityLocked"
           >
             <el-option
               v-for="m in enabledModels"
@@ -409,7 +442,12 @@ watch(
           </el-select>
         </el-form-item>
         <el-form-item label="机身号" required>
-          <el-input v-model="form.serialNumber" maxlength="128" placeholder="全局唯一，保存后转大写" />
+          <el-input
+            v-model="form.serialNumber"
+            maxlength="128"
+            placeholder="全局唯一，保存后转大写"
+            :disabled="identityLocked"
+          />
         </el-form-item>
         <el-form-item label="机场名称" required>
           <el-input v-model="form.airportName" maxlength="100" placeholder="如 浦东机场" />

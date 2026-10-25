@@ -168,8 +168,8 @@ const remove = async (row: AdminAircraftModelVo) => {
     ElMessage.success('机型已删除')
     await load()
   } catch (err) {
-    const message = err instanceof Error ? err.message : '删除机型失败'
-    ElMessage.error(`${message}（若已被引用，请改为停用）`)
+    // 后端已说明原因（如被引用请改停用），不再叠前端文案
+    ElMessage.error(err instanceof Error ? err.message : '删除机型失败')
   }
 }
 
