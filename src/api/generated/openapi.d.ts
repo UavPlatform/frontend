@@ -64,6 +64,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/dispatch/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 派单订单分页列表
+         * @description 按创建时间倒序；page 从 0 起，size 上限 100
+         */
+        get: operations["list_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/dispatch/orders/{orderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 派单订单详情
+         * @description 订单视图（含运单、账单、实际执行无人机）、参与方、状态时间线、派单记录、连机记录
+         */
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/login": {
         parameters: {
             query?: never;
@@ -3131,6 +3171,78 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 派单（接单）记录，每次重新派单 assignmentVersion 递增 */
+        AdminDispatchOrderAssignment: {
+            /** Format: date-time */
+            acceptedAt?: string;
+            /** Format: date-time */
+            arrivedAt?: string;
+            /** Format: int64 */
+            assignmentVersion?: number;
+            endReason?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            pilot?: components["schemas"]["AdminDispatchOrderParty"];
+        };
+        /** @description djifly 上报的连机记录 */
+        AdminDispatchOrderConnection: {
+            /** Format: int64 */
+            aircraftModelId?: number;
+            /** Format: int64 */
+            assignmentVersion?: number;
+            connectionId?: string;
+            endReason?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            modelCode?: string;
+            modelName?: string;
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: int64 */
+            pilotId?: number;
+            serialNumber?: string;
+        };
+        /** @description 管理端派单订单详情：order 为与货主端一致的订单视图（含运单字段 fields、账单 bill、实际执行无人机） */
+        AdminDispatchOrderDetail: {
+            assignments?: components["schemas"]["AdminDispatchOrderAssignment"][];
+            connections?: components["schemas"]["AdminDispatchOrderConnection"][];
+            order?: components["schemas"]["DispatchOrderVO"];
+            pilot?: components["schemas"]["AdminDispatchOrderParty"];
+            shipper?: components["schemas"]["AdminDispatchOrderParty"];
+            timeline?: components["schemas"]["AdminDispatchOrderTimelineEvent"][];
+        };
+        /** @description 订单参与方（货主或飞手） */
+        AdminDispatchOrderParty: {
+            /** Format: int64 */
+            userId?: number;
+            userName?: string;
+        };
+        /** @description 管理端派单订单列表行 */
+        AdminDispatchOrderRow: {
+            /** Format: date-time */
+            createdAt?: string;
+            depositAmount?: number;
+            executedModelName?: string;
+            executedSerialNumber?: string;
+            fundsStatus?: string;
+            orderId?: string;
+            pilot?: components["schemas"]["AdminDispatchOrderParty"];
+            pilotServiceFee?: number;
+            shipper?: components["schemas"]["AdminDispatchOrderParty"];
+            stage?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        /** @description 状态时间线节点（按时间升序） */
+        AdminDispatchOrderTimelineEvent: {
+            /** Format: int64 */
+            actorUserId?: number;
+            /** Format: date-time */
+            at?: string;
+            event?: string;
+            /** @description 结束原因，仅 ASSIGNMENT_ENDED 可能有值 */
+            reason?: string;
+        };
         AdminDto: {
             name?: string;
             password?: string;
@@ -3200,6 +3312,31 @@ export interface components {
              * @description 下单用户ID
              */
             userId?: number;
+        };
+        /** @description 管理端分页信封（page 从 0 开始） */
+        AdminPageVoAdminDispatchOrderRow: {
+            /** @description 当前页数据列表 */
+            content?: components["schemas"]["AdminDispatchOrderRow"][];
+            /**
+             * Format: int32
+             * @description 当前页码（从 0 开始）
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 每页条数
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 总记录数
+             */
+            totalElements?: number;
+            /**
+             * Format: int32
+             * @description 总页数（由总记录数与每页条数计算）
+             */
+            totalPages?: number;
         };
         /** @description 管理端分页信封（page 从 0 开始） */
         AdminPageVoAdminOrderVo: {
@@ -4231,6 +4368,22 @@ export interface components {
             userName?: string;
         };
         /** @description 统一响应结果封装 */
+        ResultAdminDispatchOrderDetail: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminDispatchOrderDetail"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
         ResultAdminLoginVO: {
             /**
              * Format: int32
@@ -4255,6 +4408,22 @@ export interface components {
             code?: number;
             /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
             data?: components["schemas"]["AdminOrderVo"];
+            /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
+            errorCode?: string;
+            /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
+            message?: string;
+            /** @description 是否成功：true 成功 / false 失败 */
+            success?: boolean;
+        };
+        /** @description 统一响应结果封装 */
+        ResultAdminPageVoAdminDispatchOrderRow: {
+            /**
+             * Format: int32
+             * @description 响应状态码（200 成功；400 参数或业务错误；401 未登录；404 资源不存在；409 状态冲突；500 服务端错误）
+             */
+            code?: number;
+            /** @description 业务数据（泛型；成功且有返回值时非空，无数据时为 null） */
+            data?: components["schemas"]["AdminPageVoAdminDispatchOrderRow"];
             /** @description 业务错误码（失败时非空，取值见 ApiErrorCode 枚举，如 UAV_NOT_CONNECTED；成功时为 null） */
             errorCode?: string;
             /** @description 提示信息（成功为“操作成功”，失败为具体失败原因） */
@@ -6286,6 +6455,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultVoid"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: {
+                /** @description 关键字：订单号、货主或飞手用户名模糊匹配 */
+                keyword?: string;
+                /** @description 创建时间上限（不含），ISO-8601 */
+                createdTo?: string;
+                /** @description 创建时间下限（含），ISO-8601 */
+                createdFrom?: string;
+                /** @description 每页条数（默认 20，上限 100） */
+                size?: number;
+                /** @description 订单阶段：AWAITING_DEPOSIT / WAITING_ACCEPTANCE / PILOT_PREPARING / PILOT_ARRIVED / IN_TRANSIT / DELIVERY_CONFIRMATION / COMPLETED / CANCELLED；未知值 400 */
+                stage?: string;
+                /** @description 资金状态：UNPAID / PAID / BALANCE_DUE / SETTLED / REFUNDED；未知值 400 */
+                fundsStatus?: string;
+                /** @description 页码（从 0 起） */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminPageVoAdminDispatchOrderRow"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdminDispatchOrderDetail"];
                 };
             };
         };
