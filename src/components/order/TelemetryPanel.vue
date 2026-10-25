@@ -55,9 +55,19 @@ const refresh = async () => {
     if (!deviceId) {
       const result = await fetchOrderTelemetry(orderNum)
       if (!disposed && seq === requestSeq) {
-        telemetry.value = result ?? null
-        consecutiveMisses.value = 0
         now.value = Date.now()
+        if (result) {
+          telemetry.value = result
+          consecutiveMisses.value = 0
+        } else if (telemetry.value) {
+          // 短暂失败保留最后一次成功值（#16 遗留：无设备分支原先会直接清空）
+          consecutiveMisses.value = Math.min(
+            TELEMETRY_MISSES_BEFORE_STALE,
+            consecutiveMisses.value + 1,
+          )
+        } else {
+          telemetry.value = null
+        }
       }
       return
     }
