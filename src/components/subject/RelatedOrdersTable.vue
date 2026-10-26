@@ -25,12 +25,15 @@ const statusLabel = (vo: AdminOrderVo) =>
 
 const money = (value?: number) => (value != null ? `¥${Number(value).toFixed(2)}` : '—')
 
-const openOrder = (vo: AdminOrderVo) => {
-  if (!vo.orderNum) {
+type RelatedOrder = AdminOrderVo & { orderId?: string }
+
+const openOrder = (vo: RelatedOrder) => {
+  const orderId = vo.orderId || vo.orderNum
+  if (!orderId) {
     ElMessage.warning('该订单缺少订单号，无法查看详情')
     return
   }
-  void router.push({ name: 'order-detail', params: { orderNum: vo.orderNum } }).catch(() => undefined)
+  void router.push({ name: 'order-detail', params: { orderNum: orderId } }).catch(() => undefined)
 }
 </script>
 
@@ -52,7 +55,9 @@ const openOrder = (vo: AdminOrderVo) => {
       stripe
       @row-click="openOrder"
     >
-      <el-table-column prop="orderNum" label="订单号" min-width="180" />
+      <el-table-column label="订单号" min-width="180">
+        <template #default="scope">{{ scope.row.orderId || scope.row.orderNum || '—' }}</template>
+      </el-table-column>
       <el-table-column label="任务" min-width="150">
         <template #default="scope">
           {{ scope.row.taskName || '—' }}

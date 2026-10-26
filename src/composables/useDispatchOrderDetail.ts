@@ -10,12 +10,14 @@ import type { AdminDispatchOrderDetail } from '../types/admin'
 export const useDispatchOrderDetail = (orderId: Ref<string>) => {
   const detail = ref<AdminDispatchOrderDetail>()
   const loading = ref(false)
+  const error = ref<{ code?: string; message: string } | null>(null)
 
   let loadSeq = 0
   const reload = async () => {
     const seq = ++loadSeq
     loading.value = true
     detail.value = undefined
+    error.value = null
     if (!orderId.value) {
       loading.value = false
       return
@@ -27,6 +29,12 @@ export const useDispatchOrderDetail = (orderId: Ref<string>) => {
     } catch (err) {
       if (seq === loadSeq) {
         detail.value = undefined
+        error.value = {
+          code: typeof err === 'object' && err !== null && 'errorCode' in err
+            ? String(err.errorCode)
+            : undefined,
+          message: err instanceof Error ? err.message : '查询派单订单详情失败',
+        }
         ElMessage.error(err instanceof Error ? err.message : '查询派单订单详情失败')
       }
     } finally {
@@ -70,6 +78,7 @@ export const useDispatchOrderDetail = (orderId: Ref<string>) => {
     deviceId,
     isFlying,
     loading,
+    error,
     reload,
   }
 }

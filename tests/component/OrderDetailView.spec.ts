@@ -70,8 +70,18 @@ describe('OrderDetailView dispatch', () => {
   })
 
   it('shows empty state when missing', async () => {
-    getAdminDispatchOrderDetail.mockRejectedValue(new Error('not found'))
+    getAdminDispatchOrderDetail.mockRejectedValue(
+      Object.assign(new Error('订单不存在'), { errorCode: 'ORDER_NOT_FOUND' }),
+    )
     const wrapper = await mountView()
     expect(wrapper.text()).toContain('未查询到该派单订单')
+  })
+
+  it('shows a retryable error for other service failures', async () => {
+    getAdminDispatchOrderDetail.mockRejectedValue(new Error('服务暂不可用'))
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('订单详情加载失败')
+    expect(wrapper.text()).toContain('服务暂不可用')
+    expect(wrapper.text()).toContain('重试')
   })
 })
