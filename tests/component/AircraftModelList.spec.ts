@@ -99,4 +99,33 @@ describe('机型列表（REQ-SUP-GOV-006）', () => {
     expect(body.displayName).toBe('Matrice 350')
     expect(body.transportEnabled).toBe(true)
   })
+
+  it('保存失败时保留后端错误，并忽略重复提交', async () => {
+    let resolveSave!: (value: AdminAircraftModelVo) => void
+    api.createAdminAircraftModel.mockReturnValueOnce(new Promise((resolve) => { resolveSave = resolve }))
+    const wrapper = await mountList()
+    await wrapper.find('[data-testid="aircraft-model-create"]').trigger('click')
+    const inputs = wrapper.findAll('.el-dialog input')
+    await inputs[0].setValue('M350')
+    await inputs[1].setValue('Matrice 350')
+    const save = wrapper.find('[data-testid="aircraft-model-save"]')
+    await save.trigger('click')
+    await save.trigger('click')
+    expect(api.createAdminAircraftModel).toHaveBeenCalledTimes(1)
+    resolveSave(modelA)
+    await flushPromises()
+    api.updateAdminAircraftModel.mockRejectedValueOnce(new Error('机型已被引用'))
+    await wrapper.findAll('button').find((button) => button.text() === '编辑')!.trigger('click')
+    await wrapper.find('[data-testid="aircraft-model-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="aircraft-model-save-error"]').text()).toContain('机型已被引用')
+  })
+
+  it('加载失败后清空旧列表，避免展示过期机型', async () => {
+    const wrapper = await mountList()
+    api.getAdminAircraftModels.mockRejectedValueOnce(new Error('机型服务不可用'))
+    await wrapper.find('[data-testid="aircraft-model-refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="aircraft-model-table"]').text()).not.toContain('FC30')
+  })
 })

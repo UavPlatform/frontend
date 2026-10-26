@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -30,6 +30,8 @@ const loading = ref(false)
 
 const dialogVisible = ref(false)
 const saving = ref(false)
+const saveError = ref('')
+const mutatingId = ref<number | null>(null)
 const editing = ref<AdminAircraftModelVo | null>(null)
 const form = reactive({
   modelCode: '',
@@ -60,6 +62,8 @@ const load = async () => {
     total.value = page.totalElements ?? page.content.length
   } catch (err) {
     if (seq === loadSeq) {
+      rows.value = []
+      total.value = 0
       ElMessage.error(err instanceof Error ? err.message : '加载机型失败')
     }
   } finally {
@@ -79,6 +83,7 @@ const applyQuery = (patch: { page?: number; size?: number } = {}) => {
 
 const openCreate = () => {
   editing.value = null
+  saveError.value = ''
   form.modelCode = ''
   form.displayName = ''
   form.maxPayloadKg = 30
@@ -88,6 +93,7 @@ const openCreate = () => {
 
 const openEdit = (row: AdminAircraftModelVo) => {
   editing.value = row
+  saveError.value = ''
   form.modelCode = row.modelCode ?? ''
   form.displayName = row.displayName ?? ''
   form.maxPayloadKg = row.maxPayloadKg
@@ -103,11 +109,13 @@ const buildBody = (): AdminAircraftModelWrite => ({
 })
 
 const save = async () => {
+  if (saving.value) return
+  saveError.value = ''
   if (!form.modelCode.trim() || !form.displayName.trim()) {
     ElMessage.warning('请填写型号代码与显示名')
     return
   }
-  if (!(Number(form.maxPayloadKg) > 0)) {
+  if (form.maxPayloadKg == null || !Number.isFinite(form.maxPayloadKg) || form.maxPayloadKg <= 0) {
     ElMessage.warning('最大载重须大于 0')
     return
   }
@@ -124,7 +132,8 @@ const save = async () => {
     dialogVisible.value = false
     await load()
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '保存机型失败')
+    saveError.value = err instanceof Error ? err.message : '保存机型失败'
+    ElMessage.error(saveError.value)
   } finally {
     saving.value = false
   }
@@ -132,6 +141,7 @@ const save = async () => {
 
 const toggleEnabled = async (row: AdminAircraftModelVo, enabled: boolean) => {
   if (row.id == null) return
+  if (mutatingId.value === row.id) return
   if (!enabled) {
     try {
       await ElMessageBox.confirm(
@@ -143,17 +153,21 @@ const toggleEnabled = async (row: AdminAircraftModelVo, enabled: boolean) => {
       return
     }
   }
+  mutatingId.value = row.id
   try {
     await setAdminAircraftModelEnabled(row.id, enabled)
     ElMessage.success(enabled ? '机型已启用' : '机型已停用')
     await load()
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : '修改机型状态失败')
+  } finally {
+    mutatingId.value = null
   }
 }
 
 const remove = async (row: AdminAircraftModelVo) => {
   if (row.id == null) return
+  if (mutatingId.value === row.id) return
   try {
     await ElMessageBox.confirm(
       `确认删除机型「${row.displayName || row.modelCode}」？已被引用的机型无法删除，请改用停用。`,
@@ -163,6 +177,7 @@ const remove = async (row: AdminAircraftModelVo) => {
   } catch {
     return
   }
+  mutatingId.value = row.id
   try {
     await deleteAdminAircraftModel(row.id)
     ElMessage.success('机型已删除')
@@ -170,6 +185,8 @@ const remove = async (row: AdminAircraftModelVo) => {
   } catch (err) {
     // 后端已说明原因（如被引用请改停用），不再叠前端文案
     ElMessage.error(err instanceof Error ? err.message : '删除机型失败')
+  } finally {
+    mutatingId.value = null
   }
 }
 
@@ -187,6 +204,8 @@ watch(
   },
   { immediate: true },
 )
+
+onBeforeUnmount(() => { loadSeq += 1 })
 </script>
 
 <template>
@@ -197,7 +216,7 @@ watch(
           型号代码须与 djifly 连机上报一致（如 FC30）。停用后登记无人机时选不到。
         </div>
         <div class="flex items-center gap-2">
-          <el-button :loading="loading" @click="load">刷新</el-button>
+          <el-button data-testid="aircraft-model-refresh" :loading="loading" @click="load">刷新</el-button>
           <el-button type="primary" data-testid="aircraft-model-create" @click="openCreate">新增机型</el-button>
         </div>
       </div>
@@ -229,11 +248,20 @@ watch(
               <el-button
                 size="small"
                 :type="row.enabled ? 'warning' : 'success'"
+                :loading="mutatingId === row.id"
+                :disabled="mutatingId != null && mutatingId !== row.id"
                 @click="toggleEnabled(row, !row.enabled)"
               >
                 {{ row.enabled ? '停用' : '启用' }}
               </el-button>
-              <el-button size="small" type="danger" plain @click="remove(row)">删除</el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="mutatingId === row.id"
+                :disabled="mutatingId != null && mutatingId !== row.id"
+                @click="remove(row)"
+              >删除</el-button>
             </template>
           </el-table-column>
           <template #empty>
@@ -259,9 +287,18 @@ watch(
     <el-dialog
       v-model="dialogVisible"
       :title="editing ? '编辑机型' : '新增机型'"
-      width="480px"
+      width="min(480px, 94vw)"
       destroy-on-close
     >
+      <el-alert
+        v-if="saveError"
+        :title="saveError"
+        type="error"
+        show-icon
+        :closable="false"
+        class="mb-3"
+        data-testid="aircraft-model-save-error"
+      />
       <el-form label-width="110px">
         <el-form-item label="型号代码" required>
           <el-input v-model="form.modelCode" maxlength="64" placeholder="如 FC30" />

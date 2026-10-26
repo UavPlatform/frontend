@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -50,6 +50,7 @@ const borrowsDrone = ref<AdminDroneVo | null>(null)
 const borrows = ref<AdminDroneBorrowVo[]>([])
 const borrowsTotal = ref(0)
 const borrowsPage = ref(1)
+let borrowsSeq = 0
 
 const parseQuery = (query: Record<string, unknown>) => {
   const size = Number(query.size)
@@ -171,6 +172,7 @@ const buildBody = (): AdminDroneWrite => ({
 })
 
 const save = async () => {
+  if (saving.value) return
   if (!form.aircraftModelId) {
     ElMessage.warning('请选择机型')
     return
@@ -179,7 +181,9 @@ const save = async () => {
     ElMessage.warning('请填写机身号与机场名称')
     return
   }
-  if (!Number.isFinite(Number(form.latitude)) || !Number.isFinite(Number(form.longitude))) {
+  if (form.latitude == null || form.longitude == null ||
+    !Number.isFinite(form.latitude) || !Number.isFinite(form.longitude) ||
+    Math.abs(form.latitude) > 90 || Math.abs(form.longitude) > 180) {
     ElMessage.warning('请填写有效的机场经纬度')
     return
   }
@@ -240,12 +244,15 @@ const openLatestOrder = (row: AdminDroneVo) => {
 const openBorrows = async (row: AdminDroneVo) => {
   if (!row.droneId) return
   borrowsDrone.value = row
+  borrows.value = []
+  borrowsTotal.value = 0
   borrowsPage.value = 1
   borrowsVisible.value = true
   await loadBorrows()
 }
 
 const loadBorrows = async () => {
+  const seq = ++borrowsSeq
   const droneId = borrowsDrone.value?.droneId
   if (!droneId) return
   borrowsLoading.value = true
@@ -254,14 +261,27 @@ const loadBorrows = async () => {
       page: borrowsPage.value - 1,
       size: 20,
     })
+    if (seq !== borrowsSeq) return
     borrows.value = page.content
     borrowsTotal.value = page.totalElements ?? page.content.length
   } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '加载借还记录失败')
+    if (seq === borrowsSeq) {
+      borrows.value = []
+      borrowsTotal.value = 0
+      ElMessage.error(err instanceof Error ? err.message : '加载借还记录失败')
+    }
   } finally {
-    borrowsLoading.value = false
+    if (seq === borrowsSeq) borrowsLoading.value = false
   }
 }
+
+watch(borrowsVisible, (visible) => {
+  if (!visible) {
+    borrowsSeq += 1
+    borrowsLoading.value = false
+  }
+})
+onBeforeUnmount(() => { loadSeq += 1; borrowsSeq += 1 })
 
 let firstQuerySync = true
 watch(
@@ -396,7 +416,7 @@ watch(
     <el-dialog
       v-model="dialogVisible"
       :title="editing ? '编辑无人机' : '登记无人机'"
-      width="520px"
+      width="min(520px, 94vw)"
       destroy-on-close
     >
       <el-alert
@@ -482,7 +502,7 @@ watch(
     <el-drawer
       v-model="borrowsVisible"
       :title="`借还记录 · ${borrowsDrone?.serialNumber || ''}`"
-      size="480px"
+      size="min(480px, 100vw)"
       destroy-on-close
     >
       <el-table v-loading="borrowsLoading" :data="borrows" border stripe size="small">
