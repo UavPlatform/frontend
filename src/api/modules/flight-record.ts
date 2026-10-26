@@ -53,6 +53,7 @@ export const loadFlightHistory = async (
   let connections: FlightConnection[] = []
   let afterCapturedAt: number | undefined
   let afterSampleId: number | undefined
+  const seenCursors = new Set<string>()
 
   for (let page = 0; page < 100; page += 1) {
     const result = await getFlightHistory(orderId, {
@@ -62,12 +63,16 @@ export const loadFlightHistory = async (
     })
     items.push(...(result.items ?? []))
     if (page === 0) connections = result.connections ?? []
-    if (!result.hasNext || result.items?.length === 0) {
+    if (!result.hasNext) {
       return { ...result, items, connections, hasNext: false }
     }
-    if (result.nextCapturedAt === undefined && result.nextSampleId === undefined) {
-      return { ...result, items, connections, hasNext: false }
+    const cursor = `${result.nextCapturedAt}:${result.nextSampleId}`
+    if (!result.items?.length || result.nextCapturedAt == null ||
+      result.nextSampleId == null || seenCursors.has(cursor)) {
+      // Keep partial results visible, but never represent a broken cursor as a complete track.
+      return { ...result, items, connections, hasNext: true }
     }
+    seenCursors.add(cursor)
     afterCapturedAt = result.nextCapturedAt
     afterSampleId = result.nextSampleId
   }

@@ -80,7 +80,7 @@ describe('supervision request lifecycles', () => {
   })
 
   it('discards old telemetry and does not start polling after unmount', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     const old = deferred<unknown>()
     fetchOrderStartedAt.mockResolvedValue(undefined)
     fetchOrderPosition.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ altitude: 80 })
@@ -100,7 +100,7 @@ describe('supervision request lifecycles', () => {
   })
 
   it('does not leave a polling timer when initial load finishes after unmount', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     const pending = deferred<null>()
     fetchOrderStartedAt.mockResolvedValue(undefined)
     fetchOrderPosition.mockReturnValue(pending.promise)
@@ -118,7 +118,7 @@ describe('supervision request lifecycles', () => {
   })
 
   it('polls one position point and reuses the trajectory start time', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     fetchOrderStartedAt.mockResolvedValue(1_000)
     fetchOrderPosition.mockResolvedValue({ altitude: 55, speed: 3, battery: 80 })
     const wrapper = mount(TelemetryPanel, {
@@ -131,7 +131,7 @@ describe('supervision request lifecycles', () => {
     expect(fetchOrderPosition).toHaveBeenCalledWith('D1', 1_000)
     expect(fetchOrderTelemetry).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(2_000)
     // 起飞时间只取一次，后续帧直接复用
     expect(fetchOrderStartedAt).toHaveBeenCalledTimes(1)
     expect(fetchOrderPosition).toHaveBeenCalledTimes(2)
@@ -171,7 +171,7 @@ describe('supervision request lifecycles', () => {
   })
 
   it('keeps the last successful telemetry during a transient empty response', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     fetchOrderStartedAt.mockResolvedValue(1_000)
     fetchOrderPosition
       .mockResolvedValueOnce({ altitude: 80, reportedAt: Date.now() })
@@ -184,18 +184,18 @@ describe('supervision request lifecycles', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('80.0 m')
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(wrapper.text()).toContain('80.0 m')
     expect(wrapper.text()).not.toContain('信号中断')
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(wrapper.text()).toContain('81.0 m')
     expect(wrapper.text()).not.toContain('信号中断')
     wrapper.unmount()
   })
 
   it('shows an interruption after three consecutive missing position responses', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     fetchOrderStartedAt.mockResolvedValue(1_000)
     fetchOrderPosition
       .mockResolvedValueOnce({ altitude: 80, reportedAt: Date.now() })
@@ -207,13 +207,43 @@ describe('supervision request lifecycles', () => {
     await flushPromises()
 
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(wrapper.text()).toContain('信号中断，显示最后一次上报数据')
+    expect(wrapper.text()).toContain('信号中断')
+    expect(wrapper.text()).toContain('显示最后一次上报数据')
     expect(wrapper.text()).toContain('80.0 m')
     wrapper.unmount()
   })
 
+  it('keeps the last point through network failures and recovers on the next success', async () => {
+    vi.useFakeTimers()
+    fetchOrderStartedAt.mockResolvedValue(1_000)
+    fetchOrderPosition
+      .mockResolvedValueOnce({ altitude: 80, reportedAt: Date.now() })
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockImplementation(async () => ({ altitude: 81, reportedAt: Date.now() }))
+    const wrapper = mount(TelemetryPanel, {
+      props: { orderNum: 'A', deviceId: 'D1' },
+      global: { plugins: [ElementPlus] },
+    })
+    try {
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(wrapper.text()).toContain('80.0 m')
+      expect(wrapper.text()).not.toContain('信号中断')
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(wrapper.text()).toContain('80.0 m')
+      expect(wrapper.text()).toContain('信号中断')
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(wrapper.text()).toContain('81.0 m')
+      expect(wrapper.text()).not.toContain('信号中断')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('does not treat a missing report timestamp as an immediate interruption', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     fetchOrderStartedAt.mockResolvedValue(1_000)
     fetchOrderPosition
       .mockResolvedValueOnce({ altitude: 80 })
@@ -225,8 +255,10 @@ describe('supervision request lifecycles', () => {
     await flushPromises()
     expect(wrapper.text()).not.toContain('信号中断')
 
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(wrapper.text()).not.toContain('信号中断')
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(wrapper.text()).toContain('信号中断')
     wrapper.unmount()
   })
 
@@ -248,7 +280,7 @@ describe('supervision request lifecycles', () => {
   })
 
   it('retries an empty start time and stops after three attempts', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers()
     fetchOrderStartedAt.mockResolvedValue(null)
     fetchOrderPosition.mockResolvedValue({ altitude: 80 })
     const wrapper = mount(TelemetryPanel, {
@@ -257,7 +289,7 @@ describe('supervision request lifecycles', () => {
     await flushPromises()
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fetchOrderStartedAt).toHaveBeenCalledTimes(3)
-    expect(fetchOrderPosition).toHaveBeenCalledTimes(7)
+    expect(fetchOrderPosition).toHaveBeenCalledTimes(31)
     wrapper.unmount()
   })
 

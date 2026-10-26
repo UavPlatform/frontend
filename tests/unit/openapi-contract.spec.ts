@@ -56,6 +56,7 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['get', '/dispatch/orders/{orderId}/flight'],
   ['get', '/dispatch/orders/{orderId}/flight/history'],
   ['get', '/dispatch/orders/{orderId}/flight/track'],
+  ['get', '/config/map'],
   ['get', '/admin/aircraft-models'],
   ['post', '/admin/aircraft-models'],
   ['put', '/admin/aircraft-models/{modelId}'],

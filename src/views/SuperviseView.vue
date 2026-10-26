@@ -56,7 +56,11 @@ const back = () => {
           </div>
         </div>
         <div class="mt-4">
-          <FlightHistoryPanel :order-id="order.orderId || orderId" />
+          <FlightHistoryPanel
+            :order-id="order.orderId || orderId"
+            :active="order.stage === 'IN_TRANSIT'"
+            :declared-payload-kg="declaredWeight"
+          />
         </div>
       </template>
       <el-empty v-else-if="!loading" description="未查询到该派单订单" />

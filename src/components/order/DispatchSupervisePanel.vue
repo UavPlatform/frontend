@@ -68,7 +68,11 @@ const context = computed(() => [
       </div>
     </section>
 
-    <FlightHistoryPanel :order-id="props.orderId" />
+    <FlightHistoryPanel
+      :order-id="props.orderId"
+      :active="props.order.stage === 'IN_TRANSIT'"
+      :declared-payload-kg="declaredWeight"
+    />
   </div>
 </template>
 

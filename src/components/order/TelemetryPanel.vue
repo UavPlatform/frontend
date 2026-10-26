@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   fetchOrderPosition,
   fetchOrderStartedAt,
@@ -10,7 +10,7 @@ import { formatClock, formatDuration } from '../../utils/date'
 
 /**
  * 遥测摘要面板（任务监管 Tab / 全屏监管共用）：
- * 轮询 `/webUav/position?deviceId=`（单点实时位置，10 秒一次，卸载即停）；
+ * 轮询 `/webUav/position?deviceId=`（单点实时位置，2 秒一次，卸载即停，REQ-SUP-MON-007）；
  * 起飞时间读取 `/webUav/trajectory?orderNum=` 的首点后缓存；空结果最多尝试三次。
  * 无作业设备（null）时不轮询，只取一次订单轨迹摘要兜底；两者都无数据才提示无遥测。
  */
@@ -20,7 +20,7 @@ const props = defineProps<{
   deviceId?: string | null
 }>()
 
-const TELEMETRY_POLL_MS = 10_000
+const TELEMETRY_POLL_MS = 2_000
 const STARTED_AT_MAX_TRIES = 3
 const TELEMETRY_STALE_MS = 30_000
 const TELEMETRY_MISSES_BEFORE_STALE = 3
@@ -98,6 +98,18 @@ const refresh = async () => {
         telemetry.value = null
       }
     }
+  } catch {
+    if (!disposed && seq === requestSeq) {
+      now.value = Date.now()
+      if (telemetry.value) {
+        consecutiveMisses.value = Math.min(
+          TELEMETRY_MISSES_BEFORE_STALE,
+          consecutiveMisses.value + 1,
+        )
+      } else {
+        telemetry.value = null
+      }
+    }
   } finally {
     if (!disposed && seq === requestSeq) { loading.value = false; inFlightKey = '' }
   }
@@ -143,6 +155,7 @@ const stale = computed(() => {
 })
 
 let pollTimer: ReturnType<typeof setInterval> | undefined
+let clockTimer: ReturnType<typeof setInterval> | undefined
 const stopPolling = () => {
   if (pollTimer !== undefined) {
     clearInterval(pollTimer)
@@ -176,7 +189,13 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
+onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 1_000) })
+onBeforeUnmount(() => {
+  disposed = true
+  requestSeq += 1
+  stopPolling()
+  if (clockTimer !== undefined) clearInterval(clockTimer)
+})
 </script>
 
 <template>
@@ -191,7 +210,7 @@ onBeforeUnmount(() => { disposed = true; requestSeq += 1; stopPolling() })
 
     <template v-else>
       <div v-if="stale" class="stale-note" role="status">
-        信号中断，显示最后一次上报数据
+        信号中断<span v-if="telemetry?.reportedAt != null"> · 已中断 {{ formatDuration(Math.max(0, now - telemetry.reportedAt)) }}</span>，显示最后一次上报数据
       </div>
       <div class="metric-grid mt-3">
         <div v-for="item in metrics" :key="item.label" class="metric-cell">
