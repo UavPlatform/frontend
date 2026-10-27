@@ -15,10 +15,10 @@ const request = vi.hoisted(() => ({
 vi.mock('../../src/api/request', () => ({ default: request }))
 
 const drone = { aircraftModelId: 1, serialNumber: 'SN-1', airportName: '测试机场', latitude: 30, longitude: 120 }
-const model = { modelCode: 'FC30', displayName: 'FlyCart', maxPayloadKg: 30, coefficient: 1, transportEnabled: true }
+const model = { modelCode: 'FC30', displayName: 'FlyCart', maxPayloadKg: 30, transportEnabled: true }
 const response = (data: unknown) => ({ data: { success: true, data } })
 
-describe('equipment and public map API integration (REQ-SUP-GOV-005/006, REQ-SUP-MON-007)', () => {
+describe('admin drone and aircraft model API integration (REQ-SUP-GOV-005/006)', () => {
   beforeEach(() => { vi.resetAllMocks() })
 
   it('preserves airport filtering and normalizes empty page content', async () => {
@@ -55,9 +55,9 @@ describe('equipment and public map API integration (REQ-SUP-GOV-005/006, REQ-SUP
   })
 
   it('retains backend identity conflict messages', async () => {
-    request.put.mockResolvedValue({ data: { success: false, errorCode: 'DRONE_CONFLICT', message: '已有借还记录，机身号不可更改' } })
+    request.put.mockResolvedValue({ data: { success: false, errorCode: 'INVALID_PARAM', message: '设备已有借还记录，不能更改机身号或机型' } })
     await expect(updateAdminDrone('d1', drone)).rejects.toMatchObject({
-      errorCode: 'DRONE_CONFLICT', message: '已有借还记录，机身号不可更改',
+      errorCode: 'INVALID_PARAM', message: '设备已有借还记录，不能更改机身号或机型',
     })
   })
 
@@ -84,11 +84,9 @@ describe('equipment and public map API integration (REQ-SUP-GOV-005/006, REQ-SUP
 
   it('accepts a void deletion response but propagates referenced-model errors', async () => {
     request.delete.mockResolvedValueOnce(response(null))
-      .mockResolvedValueOnce({ data: { success: false, errorCode: 'MODEL_IN_USE', message: '机型已被引用' } })
+      .mockResolvedValueOnce({ data: { success: false, errorCode: 'INVALID_PARAM', message: '机型已被引用，请改为停用' } })
     await expect(deleteAdminAircraftModel(1)).resolves.toBeUndefined()
     expect(request.delete).toHaveBeenLastCalledWith('/admin/aircraft-models/1', undefined)
-    await expect(deleteAdminAircraftModel(1)).rejects.toMatchObject({ errorCode: 'MODEL_IN_USE', message: '机型已被引用' })
+    await expect(deleteAdminAircraftModel(1)).rejects.toMatchObject({ errorCode: 'INVALID_PARAM', message: '机型已被引用，请改为停用' })
   })
-
-
 })
