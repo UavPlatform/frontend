@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -35,6 +35,7 @@ const rows = ref<AdminDispatchOrderRow[]>([])
 const total = ref(0)
 const loading = ref(false)
 const updatedAt = ref('--:--:--')
+let loadSeq = 0
 
 const parseQuery = (query: Record<string, unknown>) => {
   let stage = String(query.stage ?? '').trim().toUpperCase()
@@ -80,6 +81,7 @@ const syncQuery = () => {
 }
 
 const load = async () => {
+  const sequence = ++loadSeq
   loading.value = true
   try {
     const { createdFrom, createdTo } = createdRange()
@@ -92,15 +94,17 @@ const load = async () => {
       createdTo,
       keyword: filters.q.trim() || undefined,
     })
+    if (sequence !== loadSeq) return
     rows.value = page.content ?? []
     total.value = page.totalElements ?? rows.value.length
     updatedAt.value = new Date().toLocaleTimeString()
   } catch (err) {
+    if (sequence !== loadSeq) return
     rows.value = []
     total.value = 0
     ElMessage.error(err instanceof Error ? err.message : '查询派单订单失败')
   } finally {
-    loading.value = false
+    if (sequence === loadSeq) loading.value = false
   }
 }
 
@@ -118,6 +122,8 @@ watch(
   },
   { immediate: true },
 )
+
+onBeforeUnmount(() => { loadSeq += 1 })
 
 const onFilterChange = () => {
   pageNo.value = 1

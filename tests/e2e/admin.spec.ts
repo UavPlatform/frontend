@@ -1,9 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
 
 // Browser integration: real Vue/router/Axios/Element Plus, isolated HTTP responses.
-// Never connect the refund tests to a live payment backend.
+// Never connect mutation tests to a live backend.
 async function api(page: Page) {
   const writes: string[] = []
+  const token = `test.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.test`
+  await page.routeWebSocket(/\/ws\/web/, (socket) => { socket.onMessage(() => undefined) })
   let approved = false
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const url = new URL(route.request().url())
@@ -15,7 +17,18 @@ async function api(page: Page) {
       totalAmount: 100, orderStatusCode: approved ? 3 : 6,
       orderStatus: approved ? 'REFUNDED' : 'DISPUTED', orderStatusDesc: approved ? '已退款' : '争议中',
     })
-    if (path === '/admin/login') data = { token: 'admin-access-token', admin: { id: 1, name: '管理员' } }
+    if (path === '/admin/login') data = { token, admin: { id: 1, name: '管理员' } }
+    else if (path === '/admin/dispatch/orders') data = { content: [], totalElements: 0, totalPages: 0 }
+    else if (path.startsWith('/admin/dispatch/orders/')) data = {
+      order: {
+        orderId: decodeURIComponent(path.split('/').at(-1)!),
+        stage: 'COMPLETED',
+        fundsStatus: 'SETTLED',
+        depositAmount: 100,
+      },
+      shipper: { userName: '测试货主' }, pilot: { userName: '测试飞手' },
+      timeline: [], assignments: [], connections: [],
+    }
     else if (path === '/admin/orders') data = { content: [order('ORD-A')], totalElements: 1, totalPages: 1 }
     else if (path.startsWith('/admin/orders/')) data = order(decodeURIComponent(path.split('/').at(-1)!))
     else if (path === '/admin/tasks') data = { content: [], totalElements: 0, totalPages: 0 }
@@ -63,23 +76,24 @@ test('密码框按回车即可登录（表单原生提交，只发一次登录�
   expect(loginCalls).toBe(1)
 })
 
-test('订单直达链接登录后恢复，取消退款不提交，确认后刷新状态', async ({ page }) => {
-  const writes = await api(page)
+test('派单订单直达链接登录后恢复，服务失败可重试', async ({ page }) => {
+  await api(page)
+  let failures = 1
+  await page.route('**/api/admin/dispatch/orders/ORD-A', async (route) => {
+    if (failures-- > 0) {
+      await route.fulfill({ status: 503, json: { success: false, message: '暂不可用' } })
+    } else {
+      await route.fallback()
+    }
+  })
   await page.goto('/orders/ORD-A')
   await expect(page).toHaveURL(/\/admin\/login\?redirect=/)
   await login(page)
   await expect(page).toHaveURL(/\/orders\/ORD-A$/)
-  await page.getByPlaceholder('处理备注（驳回时必填驳回理由，批准时可选）').fill('同意退款')
-  await page.getByRole('button', { name: '批准（退款）' }).click()
-  const dialog = page.getByRole('dialog', { name: '确认投诉处置' })
-  await expect(dialog).toContainText('ORD-A')
-  await dialog.getByRole('button', { name: '取消', exact: true }).click()
-  expect(writes).not.toContain('/admin/complaint/301/approve')
-  await page.getByRole('button', { name: '批准（退款）' }).click()
-  await dialog.getByRole('button', { name: '确认提交', exact: true }).click()
-  await expect(page.getByRole('button', { name: '批准（退款）' })).toHaveCount(0)
-  await expect(page.locator('.el-descriptions').first()).toContainText('已退款')
-  expect(writes.filter((path) => path === '/admin/complaint/301/approve')).toHaveLength(1)
+  await expect(page.getByText('订单详情加载失败', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(page.getByText('#ORD-A', { exact: true })).toBeVisible()
+  await expect(page.getByText('已结单', { exact: true }).first()).toBeVisible()
 })
 
 test('设备状态变更取消后保持原状态', async ({ page }) => {

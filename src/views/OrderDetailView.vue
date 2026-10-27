@@ -21,6 +21,8 @@ const {
   deviceId,
   isFlying,
   loading,
+  error,
+  reload,
 } = useDispatchOrderDetail(orderId)
 
 type DetailTab = 'manage' | 'supervise'
@@ -109,9 +111,22 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${Number(va
         </el-tabs>
       </template>
 
-      <el-empty v-else-if="!loading" description="未查询到该派单订单">
-        <el-button type="primary" @click="backToList">返回订单列表</el-button>
-      </el-empty>
+      <template v-else-if="!loading && error?.code === 'ORDER_NOT_FOUND'">
+        <el-empty description="未查询到该派单订单">
+          <el-button type="primary" @click="backToList">返回订单列表</el-button>
+        </el-empty>
+      </template>
+      <el-result
+        v-else-if="!loading && error"
+        icon="error"
+        title="订单详情加载失败"
+        :sub-title="error.message"
+      >
+        <template #extra>
+          <el-button type="primary" @click="reload">重试</el-button>
+          <el-button @click="backToList">返回订单列表</el-button>
+        </template>
+      </el-result>
     </section>
   </MainLayout>
 </template>

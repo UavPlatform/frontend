@@ -78,4 +78,18 @@ describe('OrderView dispatch list', () => {
       expect.objectContaining({ stage: 'IN_TRANSIT' }),
     )
   })
+
+  it('keeps the latest query result when an older response arrives later', async () => {
+    let resolveOld!: (value: ReturnType<typeof pageOf>) => void
+    getAdminDispatchOrders.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce(pageOf([row({ orderId: 'new-order' })]))
+    const wrapper = await mountView()
+    const router = wrapper.vm.$router
+    await router.replace({ name: 'orders', query: { q: 'new-order' } })
+    await flushPromises()
+    resolveOld(pageOf([row({ orderId: 'old-order' })]))
+    await flushPromises()
+    expect(wrapper.text()).toContain('new-order')
+    expect(wrapper.text()).not.toContain('old-order')
+  })
 })

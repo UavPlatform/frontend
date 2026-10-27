@@ -52,7 +52,9 @@ const openOrder = (vo: AdminOrderVo) => {
       stripe
       @row-click="openOrder"
     >
-      <el-table-column prop="orderNum" label="订单号" min-width="180" />
+      <el-table-column label="订单号" min-width="180">
+        <template #default="scope">{{ scope.row.orderNum || '—' }}</template>
+      </el-table-column>
       <el-table-column label="任务" min-width="150">
         <template #default="scope">
           {{ scope.row.taskName || '—' }}
