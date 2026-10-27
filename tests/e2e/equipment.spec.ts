@@ -19,12 +19,12 @@ async function api(page: Page) {
     }
     else if (path === '/admin/drones') data = {
       content: [{
-        droneId: 'd1', serialNumber: 'SN-1', airportName: '测试机场', enabled: true,
-        borrowStatus: 'IN_STOCK', latitude: 30, longitude: 120,
+        droneId: 'd1', serialNumber: 'SN-1', airport: { airportId: 1, name: '默认机场' }, enabled: true,
+        borrowStatus: 'IN_STOCK',
         model: { aircraftModelId: 1, displayName: 'FlyCart' },
       }, {
-        droneId: 'd2', serialNumber: 'SN-M350', airportName: '测试机场', enabled: true,
-        borrowStatus: 'IN_STOCK', latitude: 30, longitude: 120,
+        droneId: 'd2', serialNumber: 'SN-M350', airport: { airportId: 1, name: '默认机场' }, enabled: true,
+        borrowStatus: 'IN_STOCK',
         model: { aircraftModelId: 2, displayName: 'Matrice' },
       }], totalElements: 2, totalPages: 1,
     }
@@ -75,7 +75,7 @@ test('旧入口重定向到合并页，选中机型筛选无人机并预选登�
   await page.getByTestId('drone-create').click()
   const dialog = page.getByRole('dialog', { name: '登记无人机' })
   await expect(dialog.getByText('Matrice（M350）')).toBeVisible()
-  await expect(dialog.getByTestId('drone-airport-prefilled')).toBeVisible()
+  await expect(dialog.getByTestId('drone-airport-default')).toBeVisible()
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
   expect(writes).not.toContain('/admin/drones')
 })
