@@ -143,4 +143,32 @@ describe('机场 / 无人机列表（REQ-SUP-GOV-005）', () => {
     expect(pushSpy).toHaveBeenCalledWith({ name: 'order-detail', params: { orderNum: 'ord-99' } })
     pushSpy.mockRestore()
   })
+
+  it('切换无人机后忽略旧借还记录响应', async () => {
+    let resolveOld!: (value: ReturnType<typeof pageOf>) => void
+    api.getAdminDroneBorrows.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce(pageOf([{ pilotName: '新设备飞手', borrowedAt: '2026-10-25T00:00:00Z' }]))
+    const wrapper = await mountList()
+    const buttons = wrapper.findAll('button').filter((button) => button.text() === '借还记录')
+    await buttons[0].trigger('click')
+    await buttons[1].trigger('click')
+    await flushPromises()
+    resolveOld(pageOf([{ pilotName: '旧设备飞手' }]))
+    await flushPromises()
+    const drawer = wrapper.findComponent({ name: 'ElDrawer' })
+    expect(drawer.text()).toContain('新设备飞手')
+    expect(drawer.text()).not.toContain('旧设备飞手')
+  })
+
+  it('清空经纬度后不可保存，避免被转换为零坐标', async () => {
+    const wrapper = await mountList()
+    await wrapper.findAll('button').find((button) => button.text() === '编辑')!.trigger('click')
+    await flushPromises()
+    const latitude = wrapper.findComponent({ name: 'ElInputNumber' })
+    latitude.vm.$emit('update:modelValue', null)
+    await wrapper.find('[data-testid="drone-save"]').trigger('click')
+    await flushPromises()
+    expect(api.updateAdminDrone).not.toHaveBeenCalled()
+    expect(api.createAdminDrone).not.toHaveBeenCalled()
+  })
 })
