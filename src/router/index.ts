@@ -65,19 +65,15 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
-    // 机场 / 无人机（REQ-SUP-GOV-005）：登记、借用状态、执飞中、最近订单
-    path: '/drones',
-    name: 'drones',
-    component: () => import('../views/DronesView.vue'),
+    // 无人机与机型（REQ-SUP-GOV-005 / REQ-SUP-GOV-006）：左侧机型目录，右侧按机型筛选的无人机
+    path: '/fleet',
+    name: 'fleet',
+    component: () => import('../views/FleetView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
-  {
-    // 机型（REQ-SUP-GOV-006）：增改、启停、未引用可删
-    path: '/aircraft-models',
-    name: 'aircraft-models',
-    component: () => import('../views/AircraftModelsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
+  // 旧入口合并到 /fleet
+  { path: '/drones', redirect: (to) => ({ name: 'fleet', query: to.query }) },
+  { path: '/aircraft-models', redirect: { name: 'fleet' } },
   {
     path: '/system',
     name: 'system',
