@@ -38,8 +38,8 @@ describe('FlightHistoryPanel', () => {
     })
   })
 
-  const mountPanel = (active = false) => mount(FlightHistoryPanel, {
-    props: { orderId: 'dispatch-order-id', active },
+  const mountPanel = (active = false, liveExpected = false) => mount(FlightHistoryPanel, {
+    props: { orderId: 'dispatch-order-id', active, liveExpected },
     global: {
       stubs: {
         'el-button': {
@@ -218,5 +218,45 @@ describe('FlightHistoryPanel', () => {
     expect(wrapper.text()).not.toContain('旧订单失败')
     expect(wrapper.text()).not.toContain('999')
     expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('samples')).toHaveLength(2)
+  })
+
+  it('shows 暂无数据 for realtime after pilot arrival while the aircraft is not connected', async () => {
+    const wrapper = mountPanel(false, true)
+    mounted.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="flight-live-empty"]').text()).toContain('暂无数据')
+    expect(onFlightTelemetry).not.toHaveBeenCalled()
+    expect(getFlightView).not.toHaveBeenCalled()
+    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toBeNull()
+  })
+
+  it('switches between realtime and 暂无数据 as the aircraft connects and disconnects', async () => {
+    const wrapper = mountPanel(false, true)
+    mounted.push(wrapper)
+    await flushPromises()
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+    onFlightTelemetry.mock.calls[0][0]('dispatch-order-id', {
+      capturedAt: Date.now(), latitude: 30.2, longitude: 120.2,
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('实时遥测')
+    expect(wrapper.find('[data-testid="flight-live-empty"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toMatchObject({ latitude: 30.2 })
+
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="flight-live-empty"]').text()).toContain('暂无数据')
+    expect(wrapper.text()).not.toContain('信号中断')
+    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toBeNull()
+    // The recorded track stays available for review.
+    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('samples')).toHaveLength(3)
+  })
+
+  it('does not show a realtime placeholder for orders that cannot be live', async () => {
+    const wrapper = mountPanel(false, false)
+    mounted.push(wrapper)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="flight-live-empty"]').exists()).toBe(false)
   })
 })

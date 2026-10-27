@@ -17,7 +17,10 @@ import {
 
 const props = defineProps<{
   orderId: string
+  /** 飞机已连机：订阅实时遥测并显示实时位置 */
   active?: boolean
+  /** 订单处于可连机阶段（飞手到场后）；未连机时实时区显示「暂无数据」 */
+  liveExpected?: boolean
   declaredPayloadKg?: string
 }>()
 
@@ -40,8 +43,10 @@ let timer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 
 const selected = computed(() => samples.value[selectedIndex.value])
+/** 实时数据只在连机期间展示；断开后不再把最后一帧当作实时数据。 */
+const liveLatest = computed(() => (props.active ? latest.value : null))
 const liveSample = computed<FlightSample | null>(() =>
-  latest.value && followingLive.value ? { ...latest.value } : null,
+  liveLatest.value && followingLive.value ? { ...liveLatest.value } : null,
 )
 const liveInterruptionMs = computed(() => {
   if (latest.value?.capturedAt == null) return 0
@@ -214,22 +219,26 @@ onBeforeUnmount(() => {
       <div class="panel-title">历史遥测与轨迹</div>
       <el-button size="small" :loading="loading" @click="load">刷新</el-button>
     </div>
-    <div v-if="latest" class="flight-history__live" role="status">
+    <div v-if="liveLatest" class="flight-history__live" role="status">
       <strong>实时遥测</strong>
-      <span>上报 {{ formatTime(latest.capturedAt) }}</span>
-      <span>高度 {{ latest.altitude ?? '—' }} m</span>
-      <span>速度 {{ latest.speed ?? '—' }} m/s</span>
-      <span>电量 {{ latest.battery ?? '—' }}%</span>
+      <span>上报 {{ formatTime(liveLatest.capturedAt) }}</span>
+      <span>高度 {{ liveLatest.altitude ?? '—' }} m</span>
+      <span>速度 {{ liveLatest.speed ?? '—' }} m/s</span>
+      <span>电量 {{ liveLatest.battery ?? '—' }}%</span>
       <span>下单申报 {{ props.declaredPayloadKg ?? '—' }} kg</span>
     </div>
-    <div v-if="latest && (serverReportsStale || liveInterruptionMs >= MAX_SAMPLE_GAP_MS)" class="flight-history__outages" role="status">
+    <div v-else-if="props.liveExpected" class="flight-history__live" role="status" data-testid="flight-live-empty">
+      <strong>实时遥测</strong>
+      <span>暂无数据</span>
+    </div>
+    <div v-if="liveLatest && (serverReportsStale || liveInterruptionMs >= MAX_SAMPLE_GAP_MS)" class="flight-history__outages" role="status">
       信号中断 · 已中断 {{ Math.floor(liveInterruptionMs / 1000) }} 秒，地图停留在最后位置
     </div>
     <div v-if="error" class="flight-history__empty" role="alert">{{ error }}</div>
     <div v-if="!loading && !error && retentionExpired" class="flight-history__empty" role="status">
       已超过保留期（180 天），轨迹与历史遥测不可查
     </div>
-    <div v-else-if="!loading && !error && samples.length === 0 && !latest" class="flight-history__empty">
+    <div v-else-if="!loading && !error && samples.length === 0 && !liveLatest" class="flight-history__empty">
       暂无遥测数据
     </div>
     <template v-if="samples.length">
@@ -245,7 +254,7 @@ onBeforeUnmount(() => {
         <el-button size="small" :disabled="samples.length < 2" @click="togglePlayback">
           {{ playing ? '暂停' : '播放轨迹' }}
         </el-button>
-        <el-button v-if="latest && !followingLive" size="small" @click="returnToLive">返回实时位置</el-button>
+        <el-button v-if="liveLatest && !followingLive" size="small" @click="returnToLive">返回实时位置</el-button>
         <el-slider v-model="selectedIndex" aria-label="轨迹回放时间轴" :min="0" :max="Math.max(0, samples.length - 1)" :show-tooltip="false" @update:model-value="followingLive = false; stop()" />
         <span>{{ selectedIndex + 1 }} / {{ samples.length }}</span>
       </div>
@@ -257,7 +266,7 @@ onBeforeUnmount(() => {
         <span>下单申报 {{ props.declaredPayloadKg ?? '—' }} kg</span>
       </div>
     </template>
-    <FlightTrackMap v-else-if="latest" :samples="[]" :current="liveSample" :track-key="props.orderId" />
+    <FlightTrackMap v-else-if="liveLatest" :samples="[]" :current="liveSample" :track-key="props.orderId" />
     <el-table v-if="connections.length" :data="connections" size="small" max-height="220" empty-text="暂无连机记录">
       <el-table-column label="设备连接" min-width="150">
         <template #default="{ row }">{{ connectionLabel(row) }}</template>
