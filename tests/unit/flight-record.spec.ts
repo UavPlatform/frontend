@@ -48,6 +48,21 @@ describe('flight history API', () => {
     expect(result.hasNext).toBe(false)
   })
 
+  it('stops on a repeated cursor and reports that the track is incomplete', async () => {
+    apiGet.mockResolvedValue({
+      success: true,
+      data: {
+        items: [{ sampleId: 1, capturedAt: 1000 }],
+        hasNext: true,
+        nextCapturedAt: 1000,
+        nextSampleId: 1,
+      },
+    })
+    const result = await loadFlightHistory('dispatch-id')
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(result.hasNext).toBe(true)
+  })
+
   it('stops safely when the server says there is another page but supplies no cursor', async () => {
     apiGet.mockResolvedValue({
       success: true,
@@ -55,6 +70,6 @@ describe('flight history API', () => {
     })
     const result = await loadFlightHistory('dispatch-id')
     expect(apiGet).toHaveBeenCalledTimes(1)
-    expect(result.hasNext).toBe(false)
+    expect(result.hasNext).toBe(true)
   })
 })
