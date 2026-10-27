@@ -18,7 +18,8 @@ import { fetchAllPages } from './fetch-all'
  * 无人机列表（REQ-SUP-GOV-005）：登记、启停、在库/已借出/执飞中、最近订单、借还记录。
  * 作为「无人机与机型」页右栏：按左栏选中的机型筛选。
  * URL query（airport/page/size，model 由页面维护）是筛选事实源。
- * 后端列表不支持按机型筛选，这里一次拉全量（按机场），在前端按机型筛选、分页并给左栏计数。
+ * 后端列表不支持按机型筛选，这里一次拉全量（可按机场名筛），在前端按机型筛选、分页并给左栏计数。
+ * ADR-0012：登记只选机型+机身号，所属机场由后端隐式绑默认机场，表单不填机场/坐标。
  */
 const props = defineProps<{
   /** 机型目录（含停用），由左栏加载 */
@@ -59,11 +60,6 @@ const selectedModel = computed(() =>
   props.modelId == null ? null : props.models.find((m) => m.id === props.modelId) ?? null,
 )
 
-/** 平台目前只有一个机场：新登记时按已有无人机预填机场名与坐标 */
-const airportTemplate = computed(() =>
-  allRows.value.find((row) => row.airportName && row.latitude != null && row.longitude != null) ?? null,
-)
-const prefilledAirport = ref(false)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const saveError = ref('')
@@ -71,9 +67,6 @@ const editing = ref<AdminDroneVo | null>(null)
 const form = reactive({
   aircraftModelId: undefined as number | undefined,
   serialNumber: '',
-  airportName: '',
-  latitude: undefined as number | undefined,
-  longitude: undefined as number | undefined,
 })
 
 const borrowsVisible = ref(false)
@@ -168,11 +161,6 @@ const openCreate = () => {
   // 选中了启用中的机型时预选它
   form.aircraftModelId = selectedModel.value?.enabled ? selectedModel.value.id : undefined
   form.serialNumber = ''
-  const template = airportTemplate.value
-  prefilledAirport.value = template != null
-  form.airportName = template?.airportName ?? ''
-  form.latitude = template?.latitude
-  form.longitude = template?.longitude
   dialogVisible.value = true
 }
 
@@ -181,19 +169,12 @@ const openEdit = (row: AdminDroneVo) => {
   saveError.value = ''
   form.aircraftModelId = row.model?.aircraftModelId
   form.serialNumber = row.serialNumber ?? ''
-  form.airportName = row.airportName ?? ''
-  form.latitude = row.latitude
-  form.longitude = row.longitude
-  prefilledAirport.value = false
   dialogVisible.value = true
 }
 
 const buildBody = (): AdminDroneWrite => ({
   aircraftModelId: Number(form.aircraftModelId),
   serialNumber: form.serialNumber.trim(),
-  airportName: form.airportName.trim(),
-  latitude: Number(form.latitude),
-  longitude: Number(form.longitude),
 })
 
 const save = async () => {
@@ -202,14 +183,8 @@ const save = async () => {
     ElMessage.warning('请选择机型')
     return
   }
-  if (!form.serialNumber.trim() || !form.airportName.trim()) {
-    ElMessage.warning('请填写机身号与机场名称')
-    return
-  }
-  if (form.latitude == null || form.longitude == null ||
-    !Number.isFinite(form.latitude) || !Number.isFinite(form.longitude) ||
-    Math.abs(form.latitude) > 90 || Math.abs(form.longitude) > 180) {
-    ElMessage.warning('请填写有效的机场经纬度')
+  if (!form.serialNumber.trim()) {
+    ElMessage.warning('请填写机身号')
     return
   }
   saving.value = true
@@ -377,7 +352,9 @@ defineExpose({ load })
           </template>
         </el-table-column>
         <el-table-column prop="serialNumber" label="机身号" min-width="170" />
-        <el-table-column prop="airportName" label="机场" min-width="140" />
+        <el-table-column label="机场" min-width="140">
+          <template #default="{ row }">{{ row.airport?.name || '—' }}</template>
+        </el-table-column>
         <el-table-column label="启用" width="90">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'danger'" effect="plain">
@@ -471,7 +448,7 @@ defineExpose({ load })
       />
       <el-alert
         v-if="identityLocked"
-        title="该机正被借出，机身号与机型不可更改（机场信息仍可改）"
+        title="该机正被借出，机身号与机型不可更改"
         type="info"
         show-icon
         :closable="false"
@@ -479,13 +456,13 @@ defineExpose({ load })
         data-testid="drone-identity-locked"
       />
       <el-alert
-        v-if="!editing && prefilledAirport"
-        title="已按现有无人机预填机场名称与坐标，如有不同请修改"
+        v-if="!editing"
+        title="所属机场由系统绑定默认机场，无需填写"
         type="info"
         show-icon
         :closable="false"
         class="mb-3"
-        data-testid="drone-airport-prefilled"
+        data-testid="drone-airport-default"
       />
       <el-form label-width="110px">
         <el-form-item label="机型" required>
@@ -517,29 +494,6 @@ defineExpose({ load })
             maxlength="128"
             placeholder="全局唯一，保存后转大写"
             :disabled="identityLocked"
-          />
-        </el-form-item>
-        <el-form-item label="机场名称" required>
-          <el-input v-model="form.airportName" maxlength="100" placeholder="如 浦东机场" />
-        </el-form-item>
-        <el-form-item label="纬度" required>
-          <el-input-number
-            v-model="form.latitude"
-            :min="-90"
-            :max="90"
-            :step="0.0001"
-            :precision="6"
-            class="!w-full"
-          />
-        </el-form-item>
-        <el-form-item label="经度" required>
-          <el-input-number
-            v-model="form.longitude"
-            :min="-180"
-            :max="180"
-            :step="0.0001"
-            :precision="6"
-            class="!w-full"
           />
         </el-form-item>
       </el-form>

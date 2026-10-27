@@ -182,13 +182,13 @@ export interface paths {
         };
         /**
          * 无人机分页列表
-         * @description 按登记时间倒序；page 从 0 起，size 上限 100；含已停用设备。每行含在库/已借出、执飞中与最近订单
+         * @description 按登记时间倒序；page 从 0 起，size 上限 100；含已停用设备。每行含所属机场名、在库/已借出、执飞中与最近订单
          */
         get: operations["adminListDrones"];
         put?: never;
         /**
          * 登记无人机
-         * @description 机型必选（aircraft_model 中存在且启用）；机身号必填、去空格转大写后全局唯一（重复 409）；机场名称与坐标必填
+         * @description 机型必选（aircraft_model 中存在且启用）；机身号必填、去空格转大写后全局唯一（重复 409）；所属机场隐式绑定平台默认机场（ADR-0012），请求体不含机场字段
          */
         post: operations["adminCreateDrone"];
         delete?: never;
@@ -208,7 +208,7 @@ export interface paths {
         get: operations["adminGetDrone"];
         /**
          * 编辑无人机
-         * @description 机场名称与坐标随时可改；借出期间或已有借还记录后不能更改机身号或机型（409），以保留设备身份历史
+         * @description 可改机型与机身号（借出期间或已有借还记录后不能改身份，409）；机场绑定不变（本版无机场管理）
          */
         put: operations["adminUpdateDrone"];
         post?: never;
@@ -3290,8 +3290,8 @@ export interface components {
         };
         /** @description 管理端平台租借无人机 */
         AdminDroneVO: {
-            /** @description 机场名称 */
-            airportName?: string;
+            /** @description 所属机场 */
+            airport?: components["schemas"]["Airport"];
             /**
              * @description 借用状态：IN_STOCK 在库，BORROWED 已借出
              * @enum {string}
@@ -3312,10 +3312,6 @@ export interface components {
             executing?: boolean;
             /** @description 最近一笔使用本机的派单订单（按 executed_serial_number 匹配）；从未执飞为 null */
             latestOrder?: components["schemas"]["LatestOrder"];
-            /** @description 机场纬度 */
-            latitude?: number;
-            /** @description 机场经度 */
-            longitude?: number;
             /** @description 机型（引用 aircraft_model） */
             model?: components["schemas"]["Model"];
             /** @description 机身号（全局唯一，大写） */
@@ -3885,6 +3881,16 @@ export interface components {
             modelCode?: string;
             /** @description 是否可承接吊运 */
             transportEnabled?: boolean;
+        };
+        /** @description 所属机场（坐标在机场实体上，本版登记不暴露） */
+        Airport: {
+            /**
+             * Format: int64
+             * @description 机场 ID
+             */
+            airportId?: number;
+            /** @description 机场名称 */
+            name?: string;
         };
         AmapConfigVO: {
             key?: string;
@@ -4469,9 +4475,6 @@ export interface components {
         ProviderDroneDTO: {
             /** Format: int64 */
             aircraftModelId: number;
-            airportName: string;
-            latitude: number;
-            longitude: number;
             serialNumber: string;
         };
         ProviderDronePageVO: {
@@ -4483,14 +4486,14 @@ export interface components {
         ProviderDroneVO: {
             /** Format: int64 */
             aircraftModelId?: number;
+            /** Format: int64 */
+            airportId?: number;
             airportName?: string;
             borrowed?: boolean;
             borrowedByMe?: boolean;
             currentBorrowId?: string;
             droneId?: string;
             enabled?: boolean;
-            latitude?: number;
-            longitude?: number;
             modelName?: string;
             serialNumber?: string;
         };

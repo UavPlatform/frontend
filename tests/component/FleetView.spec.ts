@@ -56,9 +56,7 @@ const modelB: AdminAircraftModelVo = {
 const droneA: AdminDroneVo = {
   droneId: 'd-1',
   serialNumber: 'SN-001',
-  airportName: '浦东机场',
-  latitude: 31.14,
-  longitude: 121.8,
+  airport: { airportId: 1, name: '默认机场' },
   enabled: true,
   borrowStatus: 'BORROWED',
   executing: true,
@@ -70,9 +68,7 @@ const droneA: AdminDroneVo = {
 const droneB: AdminDroneVo = {
   droneId: 'd-2',
   serialNumber: 'SN-002',
-  airportName: '浦东机场',
-  latitude: 31.14,
-  longitude: 121.8,
+  airport: { airportId: 1, name: '默认机场' },
   enabled: true,
   borrowStatus: 'IN_STOCK',
   executing: false,
@@ -266,12 +262,13 @@ describe('无人机与机型合并页（REQ-SUP-GOV-005 / 006）', () => {
       expect(api.getAdminDrones).toHaveBeenLastCalledWith({ page: 0, size: 100, airportName: '浦东' })
     })
 
-    it('在选中机型下登记无人机时预选机型并预填机场', async () => {
+    it('在选中机型下登记无人机时预选机型，不填机场字段', async () => {
       api.createAdminDrone.mockResolvedValue(droneC)
       const wrapper = await mountFleet('?model=2')
       await wrapper.find('[data-testid="drone-create"]').trigger('click')
       await flushPromises()
-      expect(wrapper.find('[data-testid="drone-airport-prefilled"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="drone-airport-default"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="drone-airport-prefilled"]').exists()).toBe(false)
       const serial = wrapper.findAll('.el-dialog input').find((input) => input.attributes('placeholder')?.includes('全局唯一'))!
       await serial.setValue('sn-new')
       await wrapper.find('[data-testid="drone-save"]').trigger('click')
@@ -279,9 +276,6 @@ describe('无人机与机型合并页（REQ-SUP-GOV-005 / 006）', () => {
       expect(api.createAdminDrone).toHaveBeenCalledWith({
         aircraftModelId: 2,
         serialNumber: 'sn-new',
-        airportName: '浦东机场',
-        latitude: 31.14,
-        longitude: 121.8,
       })
     })
 
@@ -311,16 +305,14 @@ describe('无人机与机型合并页（REQ-SUP-GOV-005 / 006）', () => {
       expect(drawer.text()).not.toContain('旧设备飞手')
     })
 
-    it('清空经纬度后不可保存，避免被转换为零坐标', async () => {
-      const wrapper = await mountFleet()
-      await buttonIn(wrapper, '[data-testid="drone-table"]', '编辑').trigger('click')
+    it('登记时未填机身号不可保存', async () => {
+      const wrapper = await mountFleet('?model=1')
+      await wrapper.find('[data-testid="drone-create"]').trigger('click')
       await flushPromises()
-      const latitude = wrapper.findComponent({ name: 'ElInputNumber' })
-      latitude.vm.$emit('update:modelValue', null)
       await wrapper.find('[data-testid="drone-save"]').trigger('click')
       await flushPromises()
-      expect(api.updateAdminDrone).not.toHaveBeenCalled()
       expect(api.createAdminDrone).not.toHaveBeenCalled()
+      expect(api.updateAdminDrone).not.toHaveBeenCalled()
     })
 
     it('编辑失败时把后端原因留在对话框内', async () => {
