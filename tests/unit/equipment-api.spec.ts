@@ -14,7 +14,7 @@ const request = vi.hoisted(() => ({
 }))
 vi.mock('../../src/api/request', () => ({ default: request }))
 
-const drone = { aircraftModelId: 1, serialNumber: 'SN-1', airportName: '测试机场', latitude: 30, longitude: 120 }
+const drone = { aircraftModelId: 1, serialNumber: 'SN-1' }
 const model = { modelCode: 'FC30', displayName: 'FlyCart', maxPayloadKg: 30, transportEnabled: true }
 const response = (data: unknown) => ({ data: { success: true, data } })
 
