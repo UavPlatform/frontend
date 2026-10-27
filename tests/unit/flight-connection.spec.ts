@@ -94,4 +94,68 @@ describe('flight connection state (REQ-SUP-MON-007, docs#22)', () => {
     expect(getFlightView).toHaveBeenCalledTimes(calls)
     wrapper.unmount()
   })
+
+  it('stops polling on unmount and ignores a response that lands afterwards', async () => {
+    let resolveLate!: (view: object) => void
+    getFlightView.mockResolvedValueOnce(ended)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveLate = resolve }))
+    const { wrapper, state } = harness()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(FLIGHT_CONNECTION_POLL_MS)
+    expect(getFlightView).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+    resolveLate(open)
+    await flushPromises()
+    expect(state.connected.value).toBe(false)
+    await vi.advanceTimersByTimeAsync(FLIGHT_CONNECTION_POLL_MS * 5)
+    expect(getFlightView).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('ignores a late response for the previous order after switching orders', async () => {
+    let resolveOld!: (view: object) => void
+    getFlightView.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce(ended)
+    const { wrapper, state, orderId } = harness()
+    await flushPromises()
+    orderId.value = 'o2'
+    await flushPromises()
+    expect(getFlightView).toHaveBeenLastCalledWith('o2')
+    expect(state.connected.value).toBe(false)
+    resolveOld(open)
+    await flushPromises()
+    expect(state.connected.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('ignores an out-of-order older poll for the same order', async () => {
+    let resolveFirst!: (view: object) => void
+    getFlightView.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockResolvedValueOnce(open)
+    const { wrapper, state } = harness()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(FLIGHT_CONNECTION_POLL_MS)
+    expect(state.connected.value).toBe(true)
+    resolveFirst(ended)
+    await flushPromises()
+    expect(state.connected.value).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('still applies a slow poll when no newer response has arrived', async () => {
+    let resolveFirst!: (view: object) => void
+    let resolveSecond!: (view: object) => void
+    getFlightView.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+    const { wrapper, state } = harness()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(FLIGHT_CONNECTION_POLL_MS)
+    resolveFirst(open)
+    await flushPromises()
+    expect(state.connected.value).toBe(true)
+    resolveSecond(ended)
+    await flushPromises()
+    expect(state.connected.value).toBe(false)
+    wrapper.unmount()
+  })
 })

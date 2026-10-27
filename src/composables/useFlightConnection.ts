@@ -16,15 +16,22 @@ export const isFlightConnected = (view?: FlightView | null) =>
 export function useFlightConnection(orderId: Ref<string>, enabled: Ref<boolean>) {
   const connected = ref(false)
   let timer: ReturnType<typeof setInterval> | undefined
-  let sequence = 0
+  // generation 在切换订单、停用或卸载时递增，旧订单的迟到响应一律丢弃；
+  // 同一订单内按请求序号只接受比已应用结果更新的响应（慢请求不会覆盖新结果，也不会饿死）。
+  let generation = 0
+  let requested = 0
+  let applied = 0
 
   const refresh = async () => {
-    const current = ++sequence
     const id = orderId.value
     if (!id) return
+    const gen = generation
+    const seq = ++requested
     try {
       const view = await getFlightView(id)
-      if (current === sequence) connected.value = isFlightConnected(view)
+      if (gen !== generation || seq <= applied) return
+      applied = seq
+      connected.value = isFlightConnected(view)
     } catch {
       // 读取失败时保留上一次的连机状态，避免实时区来回闪烁。
     }
@@ -37,7 +44,7 @@ export function useFlightConnection(orderId: Ref<string>, enabled: Ref<boolean>)
 
   watch([orderId, enabled], ([, isEnabled], previous) => {
     stop()
-    sequence += 1
+    generation += 1
     if (!previous || previous[0] !== orderId.value || !isEnabled) connected.value = false
     if (!isEnabled || !orderId.value) return
     void refresh()
@@ -46,7 +53,7 @@ export function useFlightConnection(orderId: Ref<string>, enabled: Ref<boolean>)
 
   onBeforeUnmount(() => {
     stop()
-    sequence += 1
+    generation += 1
   })
 
   return { connected, refresh }

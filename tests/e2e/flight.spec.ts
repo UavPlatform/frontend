@@ -16,7 +16,7 @@ async function api(page: Page) {
     else if (path.startsWith('/admin/dispatch/orders/')) data = {
       order: {
         orderId: decodeURIComponent(path.split('/').at(-1)!),
-        stage: path.endsWith('/LIVE') ? 'IN_TRANSIT' : 'COMPLETED',
+        stage: path.endsWith('/LIVE') ? 'IN_TRANSIT' : path.endsWith('/IDLE') ? 'PILOT_ARRIVED' : 'COMPLETED',
         fundsStatus: 'SETTLED',
         depositAmount: 100,
         fields: { weightMax: '12' },
@@ -37,10 +37,20 @@ async function api(page: Page) {
           sampleId: 3, capturedAt, receivedAt: new Date(capturedAt).toISOString(),
           latitude: 30, longitude: 120, altitude: 42, speed: 3, battery: 75,
         },
+        // Realtime follows the aircraft connection (docs#22): an open connection has no endedAt.
+        connection: { connectionId: 'c1', serialNumber: 'SN-1', openedAt: new Date(capturedAt - 60_000).toISOString(), endedAt: null },
         stale: true,
       }
     }
-    else if (path === '/dispatch/orders/TRACK/flight/history' || path === '/dispatch/orders/LIVE/flight/history') {
+    else if (path === '/dispatch/orders/IDLE/flight') {
+      const openedAt = new Date(Date.now() - 600_000).toISOString()
+      data = {
+        connection: { connectionId: 'c0', serialNumber: 'SN-1', openedAt, endedAt: new Date(Date.now() - 300_000).toISOString() },
+        stale: true,
+        connectionHistory: [],
+      }
+    }
+    else if (['TRACK', 'LIVE', 'IDLE'].some((id) => path === `/dispatch/orders/${id}/flight/history`)) {
       data = {
         items: path.includes('/TRACK/')
           ? [
@@ -99,4 +109,14 @@ test('全屏监管也载入运输中订单快照与申报重量', async ({ page 
   await expect(page.getByText('信号中断', { exact: false }).first()).toBeVisible()
   await expect(page.getByText('高度 42 m', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('下单申报 12 kg', { exact: true }).first()).toBeVisible()
+})
+
+test('飞手到场但飞机未连机时实时区显示暂无数据', async ({ page }) => {
+  await api(page)
+  // 订单详情的「任务监管」页签仍按阶段/连机记录显示，这里走全屏监管页。
+  await page.goto('/orders/IDLE/supervise')
+  await login(page)
+  await expect(page.getByTestId('flight-live-empty')).toContainText('暂无数据')
+  await expect(page.getByText('信号中断', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('高度 42 m', { exact: true })).toHaveCount(0)
 })
