@@ -18,7 +18,7 @@ vi.mock('../../src/api/ws/modules/flight-telemetry-ws', () => ({
 vi.mock('../../src/components/flight/FlightTrackMap.vue', () => ({
   default: {
     name: 'FlightTrackMap',
-    props: ['samples', 'selected', 'gaps', 'current'],
+    props: ['samples', 'selected', 'gaps', 'current', 'trackKey'],
     template: '<div data-testid="flight-track-map" :data-points="samples?.length ?? 0" :data-gaps="gaps?.length ?? 0" />',
   },
 }))
@@ -137,6 +137,7 @@ describe('FlightHistoryPanel', () => {
     await flushPromises()
     const map = wrapper.findComponent({ name: 'FlightTrackMap' })
     expect(map.props('samples')).toHaveLength(3)
+    expect(map.props('trackKey')).toBe('dispatch-order-id')
     expect(map.props('current')).toMatchObject({ capturedAt: 10_000 })
     await wrapper.findAll('button').find((button) => button.text() === '播放轨迹')!.trigger('click')
     expect(map.props('current')).toBeNull()

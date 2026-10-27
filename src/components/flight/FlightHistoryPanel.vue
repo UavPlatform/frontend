@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
           （{{ Math.max(1, Math.round((gap.to - gap.from) / 1000)) }} 秒）
         </span>
       </div>
-      <FlightTrackMap :samples="samples" :selected="selected" :gaps="gaps" :current="liveSample" />
+      <FlightTrackMap :samples="samples" :selected="selected" :gaps="gaps" :current="liveSample" :track-key="props.orderId" />
       <div class="flight-history__controls">
         <el-button size="small" :disabled="samples.length < 2" @click="togglePlayback">
           {{ playing ? '暂停' : '播放轨迹' }}
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
         <span>下单申报 {{ props.declaredPayloadKg ?? '—' }} kg</span>
       </div>
     </template>
-    <FlightTrackMap v-else-if="latest" :samples="[]" :current="liveSample" />
+    <FlightTrackMap v-else-if="latest" :samples="[]" :current="liveSample" :track-key="props.orderId" />
     <el-table v-if="connections.length" :data="connections" size="small" max-height="220" empty-text="暂无连机记录">
       <el-table-column label="设备连接" min-width="150">
         <template #default="{ row }">{{ connectionLabel(row) }}</template>

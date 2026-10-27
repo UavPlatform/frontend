@@ -3,9 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { getMapConfig } from '../../api/modules/map-config'
 import type { FlightSample } from '../../api/modules/flight-record'
+import { wgs84ToGcj02, type LngLat } from '../../utils/coordinate'
 
-type Coordinate = [number, number]
-type MapCoordinate = Coordinate | { getLng: () => number; getLat: () => number }
+type Coordinate = LngLat
+type Overlay = {
+  setPath?: (path: Coordinate[]) => void
+  setPosition?: (position: Coordinate) => void
+  setTitle?: (title: string) => void
+}
 type AMapInstance = {
   Map: new (container: HTMLElement, options: Record<string, unknown>) => {
     add: (overlays: unknown[]) => void
@@ -16,187 +21,215 @@ type AMapInstance = {
     setCenter: (center: Coordinate) => void
     setZoom: (zoom: number) => void
   }
-  Marker: new (options: Record<string, unknown>) => unknown
-  Polyline: new (options: Record<string, unknown>) => unknown
-  convertFrom: (
-    coordinates: Coordinate | Coordinate[],
-    type: 'gps',
-    callback: (status: string, result: { info?: string; locations?: MapCoordinate[] }) => void,
-  ) => void
+  Marker: new (options: Record<string, unknown>) => Overlay
+  Polyline: new (options: Record<string, unknown>) => Overlay
 }
+type TrackPoint = FlightSample & { latitude: number; longitude: number }
 
 const props = defineProps<{
   samples: FlightSample[]
   selected?: FlightSample
   current?: FlightSample | null
   gaps?: Array<{ from: number; to: number }>
+  /** 轨迹归属（如订单号）；变化时视为新轨迹，重新铺满视野 */
+  trackKey?: string
 }>()
 
 const container = ref<HTMLElement>()
 const status = ref<'loading' | 'ready' | 'unavailable'>('loading')
 const error = ref('')
 const samplePoints = computed(() => props.samples.filter(
-  (sample): sample is FlightSample & { latitude: number; longitude: number } =>
+  (sample): sample is TrackPoint =>
     Number.isFinite(sample.latitude) && Number.isFinite(sample.longitude),
 ))
 
+const POINT_BUDGET = 300
+const POLYLINE_STYLE = {
+  strokeColor: '#1677ff',
+  strokeWeight: 5,
+  strokeOpacity: 0.85,
+  lineJoin: 'round',
+  lineCap: 'round',
+}
+
 let map: InstanceType<AMapInstance['Map']> | undefined
 let amap: AMapInstance | undefined
-let renderSequence = 0
-let markerSequence = 0
 let activeMarker: unknown
 let disposed = false
 
-const convertChunk = (points: Coordinate[]) => new Promise<Coordinate[]>((resolve, reject) => {
-  if (!amap || points.length === 0) {
-    resolve(points)
-    return
-  }
-  amap.convertFrom(points, 'gps', (resultStatus, result) => {
-    if (resultStatus === 'complete' && result.info === 'ok' && result.locations?.length === points.length) {
-      const positions = result.locations.map((point): Coordinate =>
-        Array.isArray(point) ? point : [point.getLng(), point.getLat()],
-      )
-      if (positions.every(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat))) {
-        resolve(positions)
-      } else {
-        reject(new Error('GPS 坐标转换结果无效'))
-      }
-    } else {
-      reject(new Error('GPS 坐标转换失败'))
-    }
+// 已绘制轨迹的增量状态：实时推送只追加新点，不清图、不重算、不重置视野。
+let renderedKeys: string[] = []
+let renderedTrackKey: string | undefined
+let lastRendered: TrackPoint | undefined
+let tailPath: Coordinate[] = []
+let tailLine: Overlay | undefined
+let endMarker: Overlay | undefined
+let fittedTrackKey: string | undefined
+let fittedPointCount = 0
+
+const sampleKey = (sample: FlightSample) => sample.sampleId != null
+  ? `id:${sample.sampleId}`
+  : `time:${sample.capturedAt}:${sample.connectionId ?? ''}`
+const toMapCoordinate = (sample: FlightSample): Coordinate =>
+  wgs84ToGcj02(sample.longitude!, sample.latitude!)
+const sampleTime = (sample: FlightSample) =>
+  sample.capturedAt == null ? '' : new Date(sample.capturedAt).toLocaleString()
+
+const breaksTrack = (previous: FlightSample, sample: FlightSample) => {
+  const connectionChanged = Boolean(
+    previous.connectionId && sample.connectionId && previous.connectionId !== sample.connectionId,
+  )
+  return connectionChanged || (props.gaps ?? []).some((gap) =>
+    previous.capturedAt != null && sample.capturedAt != null &&
+    previous.capturedAt <= gap.from && sample.capturedAt >= gap.to,
+  )
+}
+
+const resetRenderedState = () => {
+  renderedKeys = []
+  lastRendered = undefined
+  tailPath = []
+  tailLine = undefined
+  endMarker = undefined
+}
+
+const renderActiveMarker = () => {
+  if (!map || !amap) return
+  const sample = props.current ?? props.selected
+  if (activeMarker) map.remove(activeMarker)
+  activeMarker = undefined
+  if (!sample || !Number.isFinite(sample.latitude) || !Number.isFinite(sample.longitude)) return
+  const position = toMapCoordinate(sample)
+  activeMarker = new amap.Marker({
+    position,
+    title: props.current ? '实时位置' : '回放位置',
+    label: { content: props.current ? '实时' : '回放', direction: 'top' },
+    anchor: 'bottom-center',
   })
+  map.add([activeMarker])
+  if (props.current) map.setCenter(position)
+}
+
+const createEndMarker = (sample: TrackPoint, position: Coordinate) => new amap!.Marker({
+  position,
+  title: `终点 ${sampleTime(sample)}`,
+  label: { content: '终点', direction: 'top' },
+  anchor: 'bottom-center',
 })
 
-const toGcj02 = async (points: Coordinate[]) => {
-  if (!amap || points.length === 0) return points
-  const converted: Coordinate[] = []
-  for (let offset = 0; offset < points.length; offset += 40) {
-    converted.push(...await convertChunk(points.slice(offset, offset + 40)))
-  }
-  return converted
-}
-
-const renderActiveMarker = async () => {
-  if (!map || !amap) return
-  const sequence = ++markerSequence
-  const sample = props.current ?? props.selected
-  if (!sample || !Number.isFinite(sample.latitude) || !Number.isFinite(sample.longitude)) {
-    if (activeMarker) map.remove(activeMarker)
-    activeMarker = undefined
-    return
-  }
-  try {
-    const [position] = await toGcj02([[sample.longitude!, sample.latitude!]])
-    if (disposed || sequence !== markerSequence || !map || !amap) return
-    if (activeMarker) map.remove(activeMarker)
-    error.value = ''
-    activeMarker = new amap.Marker({
-      position,
-      title: props.current ? '实时位置' : '回放位置',
-      label: { content: props.current ? '实时' : '回放', direction: 'top' },
-      anchor: 'bottom-center',
-    })
-    map.add([activeMarker])
-    if (props.current) map.setCenter(position)
-  } catch (cause) {
-    if (!disposed && sequence === markerSequence) {
-      error.value = cause instanceof Error ? cause.message : '位置坐标转换失败'
+/** 只把新到的点接到尾段上；断联/换连接时另起一段。 */
+const appendPoints = (points: TrackPoint[]) => {
+  if (!map || !amap || !lastRendered) return
+  for (const sample of points) {
+    const position = toMapCoordinate(sample)
+    if (breaksTrack(lastRendered, sample)) {
+      tailPath = [position]
+      tailLine = undefined
+    } else {
+      tailPath = [...tailPath, position]
+      if (tailLine?.setPath) {
+        tailLine.setPath(tailPath)
+      } else if (tailPath.length > 1) {
+        tailLine = new amap.Polyline({ path: tailPath, ...POLYLINE_STYLE })
+        map.add([tailLine])
+      }
     }
+    if (endMarker?.setPosition) {
+      endMarker.setPosition(position)
+      endMarker.setTitle?.(`终点 ${sampleTime(sample)}`)
+    } else {
+      endMarker = createEndMarker(sample, position)
+      map.add([endMarker])
+    }
+    renderedKeys.push(sampleKey(sample))
+    lastRendered = sample
   }
 }
 
-const renderTrack = async () => {
+/** 新点只是在已绘制轨迹末尾追加（同一条轨迹）时才能增量绘制。 */
+const isAppendOnly = (points: TrackPoint[]) => {
+  if (!renderedKeys.length || renderedTrackKey !== props.trackKey) return false
+  if (points.length < renderedKeys.length) return false
+  return renderedKeys.every((key, index) => sampleKey(points[index]) === key)
+}
+
+const renderFullTrack = (points: TrackPoint[]) => {
   if (!map || !amap) return
-  const sequence = ++renderSequence
-  markerSequence += 1
-  error.value = ''
   map.clearMap()
   activeMarker = undefined
-  if (samplePoints.value.length === 0) {
-    await renderActiveMarker()
-    return
+  resetRenderedState()
+  renderedTrackKey = props.trackKey
+  if (points.length === 0) return
+
+  const paths: TrackPoint[][] = []
+  let path: TrackPoint[] = []
+  points.forEach((sample, index) => {
+    const previous = points[index - 1]
+    if (previous && breaksTrack(previous, sample) && path.length) {
+      paths.push(path)
+      path = []
+    }
+    path.push(sample)
+  })
+  if (path.length) paths.push(path)
+
+  const pointLimit = Math.max(2, Math.floor(POINT_BUDGET / paths.length))
+  const reducedPaths = paths.map((segment) => {
+    if (segment.length <= pointLimit) return segment
+    const stride = (segment.length - 1) / (pointLimit - 1)
+    return Array.from({ length: pointLimit }, (_, index) => segment[Math.round(index * stride)])
+  })
+
+  const overlays: unknown[] = []
+  reducedPaths.forEach((segment, index) => {
+    const coordinates = segment.map(toMapCoordinate)
+    const line = coordinates.length > 1
+      ? new amap!.Polyline({ path: coordinates, ...POLYLINE_STYLE })
+      : undefined
+    if (line) overlays.push(line)
+    if (index === reducedPaths.length - 1) {
+      tailPath = coordinates
+      tailLine = line
+    }
+  })
+
+  const first = points[0]
+  const last = points[points.length - 1]
+  overlays.push(new amap.Marker({
+    position: toMapCoordinate(first),
+    title: `起点 ${sampleTime(first)}`,
+    label: { content: '起点', direction: 'top' },
+    anchor: 'bottom-center',
+  }))
+  if (first !== last) {
+    endMarker = createEndMarker(last, toMapCoordinate(last))
+    overlays.push(endMarker)
   }
 
-  try {
-    const gapRanges = (props.gaps ?? []).map((gap) => [gap.from, gap.to] as const)
-    const paths: Array<Array<FlightSample & { latitude: number; longitude: number }>> = []
-    let path: Array<FlightSample & { latitude: number; longitude: number }> = []
-    samplePoints.value.forEach((sample, index) => {
-      const previous = samplePoints.value[index - 1]
-      const connectionChanged = Boolean(
-        previous?.connectionId && sample.connectionId &&
-        previous.connectionId !== sample.connectionId,
-      )
-      const hasGap = previous && (connectionChanged || gapRanges.some(([from, to]) =>
-        previous.capturedAt != null && sample.capturedAt != null &&
-        previous.capturedAt <= from && sample.capturedAt >= to,
-      ))
-      if (hasGap && path.length) {
-        paths.push(path)
-        path = []
-      }
-      path.push(sample)
-    })
-    if (path.length) paths.push(path)
-
-    const pointLimit = Math.max(2, Math.floor(300 / paths.length))
-    const reducedPaths = paths.map((segment) => {
-      if (segment.length <= pointLimit) return segment
-      const stride = (segment.length - 1) / (pointLimit - 1)
-      return Array.from({ length: pointLimit }, (_, index) => segment[Math.round(index * stride)])
-    })
-    const mapSamples = [...new Set(reducedPaths.flat())]
-    const converted = await toGcj02(mapSamples.map(
-      (sample) => [sample.longitude, sample.latitude] as Coordinate,
-    ))
-    if (disposed || sequence !== renderSequence || !map || !amap) return
-    const convertedBySample = new Map(mapSamples.map((sample, index) => [sample, converted[index]]))
-
-    const overlays: unknown[] = []
-    for (const segment of reducedPaths) {
-      const coordinates = segment.map((sample) => convertedBySample.get(sample)!)
-      if (coordinates.length > 1) {
-        overlays.push(new amap.Polyline({
-          path: coordinates,
-          strokeColor: '#1677ff',
-          strokeWeight: 5,
-          strokeOpacity: 0.85,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }))
-      }
-    }
-
-    const first = samplePoints.value[0]
-    const last = samplePoints.value[samplePoints.value.length - 1]
-    const firstPoint = await toGcj02([[first.longitude, first.latitude]])
-    const lastPoint = first === last
-      ? firstPoint
-      : await toGcj02([[last.longitude, last.latitude]])
-    if (disposed || sequence !== renderSequence || !map || !amap) return
-    overlays.push(new amap.Marker({
-      position: firstPoint[0],
-      title: `起点 ${first.capturedAt == null ? '' : new Date(first.capturedAt).toLocaleString()}`,
-      label: { content: '起点', direction: 'top' },
-      anchor: 'bottom-center',
-    }))
-    if (first !== last) {
-      overlays.push(new amap.Marker({
-        position: lastPoint[0],
-        title: `终点 ${last.capturedAt == null ? '' : new Date(last.capturedAt).toLocaleString()}`,
-        label: { content: '终点', direction: 'top' },
-        anchor: 'bottom-center',
-      }))
-    }
-
-    map.add(overlays)
+  renderedKeys = points.map(sampleKey)
+  lastRendered = last
+  map.add(overlays)
+  // 只在首次加载、切换订单（或此前只有单点）时铺满视野，避免覆盖监管员手动调整的视角。
+  if (fittedPointCount < 2 || fittedTrackKey !== props.trackKey) {
     map.setFitView(overlays, false, [32, 32, 32, 32], 16)
-    await renderActiveMarker()
-  } catch (cause) {
-    if (!disposed && sequence === renderSequence) {
-      error.value = cause instanceof Error ? cause.message : '轨迹绘制失败'
+    fittedTrackKey = props.trackKey
+    fittedPointCount = points.length
+  }
+}
+
+const renderTrack = () => {
+  if (!map || !amap) return
+  error.value = ''
+  const points = samplePoints.value
+  try {
+    if (isAppendOnly(points)) {
+      appendPoints(points.slice(renderedKeys.length))
+    } else {
+      renderFullTrack(points)
     }
+    renderActiveMarker()
+  } catch (cause) {
+    if (!disposed) error.value = cause instanceof Error ? cause.message : '轨迹绘制失败'
   }
 }
 
@@ -217,7 +250,7 @@ onMounted(async () => {
       mapStyle: 'amap://styles/normal',
     })
     status.value = 'ready'
-    await renderTrack()
+    renderTrack()
   } catch (cause) {
     if (disposed) return
     status.value = 'unavailable'
@@ -225,15 +258,14 @@ onMounted(async () => {
   }
 })
 
-watch(() => [props.samples, props.gaps], () => void renderTrack())
-watch(() => [props.selected, props.current], () => void renderActiveMarker())
+watch(() => [props.samples, props.gaps, props.trackKey], renderTrack)
+watch(() => [props.selected, props.current], renderActiveMarker)
 
 onBeforeUnmount(() => {
   disposed = true
-  renderSequence += 1
-  markerSequence += 1
   map?.destroy()
   map = undefined
+  resetRenderedState()
 })
 </script>
 
