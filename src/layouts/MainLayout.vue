@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Avatar,
   Close,
-  Cpu,
   DataLine,
   DArrowLeft,
   DArrowRight,
@@ -39,8 +38,7 @@ const menuItems = [
   { label: '订单', icon: Tickets, route: 'orders' },
   { label: '用户', icon: User, route: 'users' },
   { label: '飞手', icon: Avatar, route: 'pilots' },
-  { label: '机场 / 无人机', icon: Position, route: 'drones' },
-  { label: '机型', icon: Cpu, route: 'aircraft-models' },
+  { label: '无人机与机型', icon: Position, route: 'fleet' },
   { label: '系统日志', icon: Notebook, route: 'system' },
 ]
 
@@ -63,8 +61,7 @@ const ROUTE_TITLES: Record<string, string> = {
   orders: '订单',
   users: '用户',
   pilots: '飞手',
-  drones: '机场 / 无人机',
-  'aircraft-models': '机型',
+  fleet: '无人机与机型',
   system: '系统日志',
   'order-detail': '订单详情',
   'user-detail': '用户详情',

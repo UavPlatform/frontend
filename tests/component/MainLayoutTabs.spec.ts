@@ -13,8 +13,7 @@ const routes = [
   { path: '/orders', name: 'orders', component: { template: '<div />' } },
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
-  { path: '/drones', name: 'drones', component: { template: '<div />' } },
-  { path: '/aircraft-models', name: 'aircraft-models', component: { template: '<div />' } },
+  { path: '/fleet', name: 'fleet', component: { template: '<div />' } },
   { path: '/system', name: 'system', component: { template: '<div />' } },
 ]
 

@@ -10,8 +10,7 @@ const shellRoutes: Array<[path: string, name: string]> = [
   ['/orders', 'orders'],
   ['/users', 'users'],
   ['/pilots', 'pilots'],
-  ['/drones', 'drones'],
-  ['/aircraft-models', 'aircraft-models'],
+  ['/fleet', 'fleet'],
   ['/system', 'system'],
 ]
 
@@ -49,6 +48,18 @@ describe('壳层路由表（TASK-FRONTEND-001）', () => {
 
     await router.push('/records')
     expect(router.currentRoute.value.name).toBe('home')
+  })
+
+  it('旧无人机/机型入口重定向到合并页 /fleet，并保留机场筛选', async () => {
+    setStoredSession(adminSession)
+
+    await router.push('/drones?airport=%E6%B5%A6%E4%B8%9C')
+    expect(router.currentRoute.value.name).toBe('fleet')
+    expect(router.currentRoute.value.query.airport).toBe('浦东')
+
+    await router.push('/aircraft-models')
+    expect(router.currentRoute.value.name).toBe('fleet')
+    expect(router.currentRoute.value.query).toEqual({})
   })
 
   it('未登录访问壳层路由跳转登录页', async () => {

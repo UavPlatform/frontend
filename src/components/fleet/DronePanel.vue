@@ -2,8 +2,6 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import MainLayout from '../layouts/MainLayout.vue'
-import { getAdminAircraftModels } from '../api/modules/admin-aircraft-model'
 import {
   createAdminDrone,
   getAdminDroneBorrows,
@@ -11,14 +9,29 @@ import {
   setAdminDroneEnabled,
   updateAdminDrone,
   type AdminDroneWrite,
-} from '../api/modules/admin-drone'
-import { DISPATCH_STAGE_META } from '../api/modules/admin-dispatch'
-import type { AdminAircraftModelVo, AdminDroneBorrowVo, AdminDroneVo } from '../types/admin'
+} from '../../api/modules/admin-drone'
+import { DISPATCH_STAGE_META } from '../../api/modules/admin-dispatch'
+import type { AdminAircraftModelVo, AdminDroneBorrowVo, AdminDroneVo } from '../../types/admin'
+import { fetchAllPages } from './fetch-all'
 
 /**
- * 机场 / 无人机管理（REQ-SUP-GOV-005）：登记、启停、在库/已借出/执飞中、最近订单、借还记录。
- * URL query（airport/page/size）是筛选事实源。
+ * 无人机列表（REQ-SUP-GOV-005）：登记、启停、在库/已借出/执飞中、最近订单、借还记录。
+ * 作为「无人机与机型」页右栏：按左栏选中的机型筛选。
+ * URL query（airport/page/size，model 由页面维护）是筛选事实源。
+ * 后端列表不支持按机型筛选，这里一次拉全量（按机场），在前端按机型筛选、分页并给左栏计数。
  */
+const props = defineProps<{
+  /** 机型目录（含停用），由左栏加载 */
+  models: AdminAircraftModelVo[]
+  /** 选中的机型 id；null = 全部机型 */
+  modelId: number | null
+}>()
+
+const emit = defineEmits<{
+  /** 当前机场筛选下的全部无人机（供左栏计数） */
+  loaded: [drones: AdminDroneVo[] | null]
+}>()
+
 const route = useRoute()
 const router = useRouter()
 
@@ -27,11 +40,30 @@ const PAGE_SIZES = [10, 20, 50, 100]
 const filters = reactive({ airport: '' })
 const pageNo = ref(1)
 const pageSize = ref(20)
-const rows = ref<AdminDroneVo[]>([])
-const total = ref(0)
+const allRows = ref<AdminDroneVo[]>([])
+const truncated = ref(false)
 const loading = ref(false)
 
-const modelOptions = ref<AdminAircraftModelVo[]>([])
+const filteredRows = computed(() =>
+  props.modelId == null
+    ? allRows.value
+    : allRows.value.filter((row) => row.model?.aircraftModelId === props.modelId),
+)
+const total = computed(() => filteredRows.value.length)
+const rows = computed(() => {
+  const start = (pageNo.value - 1) * pageSize.value
+  return filteredRows.value.slice(start, start + pageSize.value)
+})
+
+const selectedModel = computed(() =>
+  props.modelId == null ? null : props.models.find((m) => m.id === props.modelId) ?? null,
+)
+
+/** 平台目前只有一个机场：新登记时按已有无人机预填机场名与坐标 */
+const airportTemplate = computed(() =>
+  allRows.value.find((row) => row.airportName && row.latitude != null && row.longitude != null) ?? null,
+)
+const prefilledAirport = ref(false)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const saveError = ref('')
@@ -73,7 +105,7 @@ const stageLabel = (stage?: string | null) => {
 }
 
 const enabledModels = computed(() =>
-  modelOptions.value.filter((m) => m.enabled && m.id != null),
+  props.models.filter((m) => m.enabled && m.id != null),
 )
 
 /** 编辑时若当前机型已停用，仍在下拉中展示一条不可选的当前值 */
@@ -97,29 +129,19 @@ const load = async () => {
   const seq = ++loadSeq
   loading.value = true
   try {
-    const page = await getAdminDrones({
-      page: pageNo.value - 1,
-      size: pageSize.value,
-      airportName: filters.airport.trim() || undefined,
-    })
+    const airportName = filters.airport.trim() || undefined
+    const result = await fetchAllPages((page, size) => getAdminDrones({ page, size, airportName }))
     if (seq !== loadSeq) return
-    rows.value = page.content
-    total.value = page.totalElements ?? page.content.length
+    allRows.value = result.items
+    truncated.value = result.truncated
+    emit('loaded', result.items)
   } catch (err) {
     if (seq === loadSeq) {
+      emit('loaded', null)
       ElMessage.error(err instanceof Error ? err.message : '加载无人机失败')
     }
   } finally {
     if (seq === loadSeq) loading.value = false
-  }
-}
-
-const loadModels = async () => {
-  try {
-    const page = await getAdminAircraftModels({ page: 0, size: 100 })
-    modelOptions.value = page.content
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '加载机型失败')
   }
 }
 
@@ -128,10 +150,11 @@ const applyQuery = (patch: { page?: number; size?: number } = {}) => {
   const size = patch.size ?? pageSize.value
   if (patch.size !== undefined) pageSize.value = patch.size
   const query: Record<string, string> = {}
+  if (route.query.model) query.model = String(route.query.model)
   if (filters.airport.trim()) query.airport = filters.airport.trim()
   if (page > 1) query.page = String(page)
   if (size !== 20) query.size = String(size)
-  void router.replace({ name: 'drones', query })
+  void router.replace({ name: 'fleet', query })
 }
 
 const resetFilters = () => {
@@ -139,19 +162,21 @@ const resetFilters = () => {
   applyQuery()
 }
 
-const openCreate = async () => {
+const openCreate = () => {
   editing.value = null
   saveError.value = ''
-  form.aircraftModelId = undefined
+  // 选中了启用中的机型时预选它
+  form.aircraftModelId = selectedModel.value?.enabled ? selectedModel.value.id : undefined
   form.serialNumber = ''
-  form.airportName = ''
-  form.latitude = undefined
-  form.longitude = undefined
-  if (modelOptions.value.length === 0) await loadModels()
+  const template = airportTemplate.value
+  prefilledAirport.value = template != null
+  form.airportName = template?.airportName ?? ''
+  form.latitude = template?.latitude
+  form.longitude = template?.longitude
   dialogVisible.value = true
 }
 
-const openEdit = async (row: AdminDroneVo) => {
+const openEdit = (row: AdminDroneVo) => {
   editing.value = row
   saveError.value = ''
   form.aircraftModelId = row.model?.aircraftModelId
@@ -159,7 +184,7 @@ const openEdit = async (row: AdminDroneVo) => {
   form.airportName = row.airportName ?? ''
   form.latitude = row.latitude
   form.longitude = row.longitude
-  if (modelOptions.value.length === 0) await loadModels()
+  prefilledAirport.value = false
   dialogVisible.value = true
 }
 
@@ -284,6 +309,7 @@ watch(borrowsVisible, (visible) => {
 onBeforeUnmount(() => { loadSeq += 1; borrowsSeq += 1 })
 
 let firstQuerySync = true
+let loadedAirport = ''
 watch(
   () => route.query,
   (query) => {
@@ -291,127 +317,142 @@ watch(
     filters.airport = parsed.airport
     pageNo.value = parsed.page
     pageSize.value = parsed.size
-    if (firstQuerySync || route.name === 'drones') {
+    // 机型/分页只在前端切片；只有机场筛选变化才重新拉取
+    if (firstQuerySync || (route.name === 'fleet' && parsed.airport !== loadedAirport)) {
       firstQuerySync = false
+      loadedAirport = parsed.airport
       void load()
     }
   },
   { immediate: true },
 )
+
+defineExpose({ load })
 </script>
 
 <template>
-  <MainLayout
-    title="机场 / 无人机"
-    subtitle="登记平台租借无人机及所在机场，查看在库 / 已借出 / 执飞中状态与最近订单。"
-  >
-    <section class="panel-card p-5">
-      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div class="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-          <el-input
-            v-model="filters.airport"
-            class="md:!w-[240px]"
-            clearable
-            placeholder="按机场名称筛选"
-            data-testid="drone-airport-filter"
-            @keyup.enter="applyQuery()"
-            @clear="applyQuery()"
-          />
-          <el-button type="primary" @click="applyQuery()">查询</el-button>
-          <el-button @click="resetFilters">重置</el-button>
-        </div>
-        <div class="flex items-center gap-2">
-          <el-button :loading="loading" @click="load">刷新</el-button>
-          <el-button type="primary" data-testid="drone-create" @click="openCreate">登记无人机</el-button>
-        </div>
+  <section class="panel-card min-w-0 p-5" data-testid="drone-panel">
+    <div class="mb-3 flex flex-wrap items-baseline gap-2">
+      <div class="text-base font-semibold text-[var(--text-strong)]" data-testid="drone-panel-title">
+        {{ selectedModel ? selectedModel.displayName || selectedModel.modelCode : '全部无人机' }}
       </div>
+      <span v-if="selectedModel" class="font-mono text-xs text-[var(--text-faint)]">{{ selectedModel.modelCode }}</span>
+      <el-tag v-if="selectedModel && !selectedModel.enabled" size="small" type="danger" effect="plain">机型已停用</el-tag>
+      <span class="text-xs text-[var(--text-faint)]">共 {{ total }} 架</span>
+    </div>
+    <el-alert
+      v-if="truncated"
+      class="mb-3"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="无人机过多，仅展示前 2000 架，请按机场筛选"
+    />
+    <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div class="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+        <el-input
+          v-model="filters.airport"
+          class="md:!w-[240px]"
+          clearable
+          placeholder="按机场名称筛选"
+          data-testid="drone-airport-filter"
+          @keyup.enter="applyQuery()"
+          @clear="applyQuery()"
+        />
+        <el-button type="primary" @click="applyQuery()">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+      </div>
+      <div class="flex items-center gap-2">
+        <el-button :loading="loading" @click="load">刷新</el-button>
+        <el-button type="primary" data-testid="drone-create" @click="openCreate">登记无人机</el-button>
+      </div>
+    </div>
 
-      <div class="mt-4">
-        <el-table v-loading="loading" :data="rows" border stripe data-testid="drone-table">
-          <el-table-column label="机型" min-width="160">
-            <template #default="{ row }">
-              <div>{{ row.model?.displayName || '—' }}</div>
-              <div class="text-xs text-[var(--text-faint)]">{{ row.model?.modelCode || '' }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column prop="serialNumber" label="机身号" min-width="140" />
-          <el-table-column prop="airportName" label="机场" min-width="140" />
-          <el-table-column label="启用" width="90">
-            <template #default="{ row }">
-              <el-tag :type="row.enabled ? 'success' : 'danger'" effect="plain">
-                {{ row.enabled ? '启用' : '停用' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="借用状态" min-width="220">
-            <template #default="{ row }">
-              <div class="flex flex-wrap items-center gap-1">
-                <el-tag
-                  :type="row.borrowStatus === 'BORROWED' ? 'warning' : 'success'"
-                  effect="plain"
-                >
-                  {{ row.borrowStatus === 'BORROWED' ? '已借出' : '在库' }}
-                </el-tag>
-                <el-tag v-if="row.executing" type="danger" effect="dark">执飞中</el-tag>
-              </div>
-              <div
-                v-if="row.borrowStatus === 'BORROWED' && row.currentBorrow"
-                class="mt-1 text-xs text-[var(--text-secondary)]"
-              >
-                {{ row.currentBorrow.pilotName || `飞手#${row.currentBorrow.pilotId}` }}
-                · {{ when(row.currentBorrow.borrowedAt) }}
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="最近订单" min-width="180">
-            <template #default="{ row }">
-              <el-button
-                v-if="row.latestOrder?.orderId"
-                link
-                type="primary"
-                :data-testid="`drone-latest-order-${row.droneId}`"
-                @click="openLatestOrder(row)"
-              >
-                {{ row.latestOrder.orderId }}
-                <span class="ml-1 text-xs text-[var(--text-faint)]">
-                  （{{ stageLabel(row.latestOrder.stage) }}）
-                </span>
-              </el-button>
-              <span v-else class="text-[var(--text-faint)]">暂无订单</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="260" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button
-                size="small"
-                :type="row.enabled ? 'warning' : 'success'"
-                @click="toggleEnabled(row, !row.enabled)"
-              >
-                {{ row.enabled ? '停用' : '启用' }}
-              </el-button>
-              <el-button size="small" @click="openBorrows(row)">借还记录</el-button>
-            </template>
-          </el-table-column>
-          <template #empty>
-            <el-empty description="暂无无人机，请先登记" :image-size="80" />
+    <div class="mt-4">
+      <el-table v-loading="loading" :data="rows" border stripe data-testid="drone-table">
+        <el-table-column v-if="!selectedModel" label="机型" min-width="160">
+          <template #default="{ row }">
+            <div>{{ row.model?.displayName || '—' }}</div>
+            <div class="text-xs text-[var(--text-faint)]">{{ row.model?.modelCode || '' }}</div>
           </template>
-        </el-table>
+        </el-table-column>
+        <el-table-column prop="serialNumber" label="机身号" min-width="170" />
+        <el-table-column prop="airportName" label="机场" min-width="140" />
+        <el-table-column label="启用" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'danger'" effect="plain">
+              {{ row.enabled ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="借用状态" min-width="220">
+          <template #default="{ row }">
+            <div class="flex flex-wrap items-center gap-1">
+              <el-tag
+                :type="row.borrowStatus === 'BORROWED' ? 'warning' : 'success'"
+                effect="plain"
+              >
+                {{ row.borrowStatus === 'BORROWED' ? '已借出' : '在库' }}
+              </el-tag>
+              <el-tag v-if="row.executing" type="danger" effect="dark">执飞中</el-tag>
+            </div>
+            <div
+              v-if="row.borrowStatus === 'BORROWED' && row.currentBorrow"
+              class="mt-1 text-xs text-[var(--text-secondary)]"
+            >
+              {{ row.currentBorrow.pilotName || `飞手#${row.currentBorrow.pilotId}` }}
+              · {{ when(row.currentBorrow.borrowedAt) }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近订单" min-width="180">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.latestOrder?.orderId"
+              link
+              type="primary"
+              :data-testid="`drone-latest-order-${row.droneId}`"
+              @click="openLatestOrder(row)"
+            >
+              {{ row.latestOrder.orderId }}
+              <span class="ml-1 text-xs text-[var(--text-faint)]">
+                （{{ stageLabel(row.latestOrder.stage) }}）
+              </span>
+            </el-button>
+            <span v-else class="text-[var(--text-faint)]">暂无订单</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="230" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button
+              size="small"
+              :type="row.enabled ? 'warning' : 'success'"
+              @click="toggleEnabled(row, !row.enabled)"
+            >
+              {{ row.enabled ? '停用' : '启用' }}
+            </el-button>
+            <el-button size="small" @click="openBorrows(row)">借还记录</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty :description="selectedModel ? '该机型下暂无无人机' : '暂无无人机，请先登记'" :image-size="80" />
+        </template>
+      </el-table>
 
-        <div class="mt-4 flex justify-center">
-          <el-pagination
-            background
-            layout="total, sizes, prev, pager, next, jumper"
-            :total="total"
-            :current-page="pageNo"
-            :page-size="pageSize"
-            :page-sizes="PAGE_SIZES"
-            @current-change="(p: number) => applyQuery({ page: p })"
-            @size-change="(s: number) => applyQuery({ page: 1, size: s })"
-          />
-        </div>
+      <div class="mt-4 flex justify-center">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          :current-page="pageNo"
+          :page-size="pageSize"
+          :page-sizes="PAGE_SIZES"
+          @current-change="(p: number) => applyQuery({ page: p })"
+          @size-change="(s: number) => applyQuery({ page: 1, size: s })"
+        />
       </div>
-    </section>
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
@@ -436,6 +477,15 @@ watch(
         :closable="false"
         class="mb-3"
         data-testid="drone-identity-locked"
+      />
+      <el-alert
+        v-if="!editing && prefilledAirport"
+        title="已按现有无人机预填机场名称与坐标，如有不同请修改"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb-3"
+        data-testid="drone-airport-prefilled"
       />
       <el-form label-width="110px">
         <el-form-item label="机型" required>
@@ -532,5 +582,5 @@ watch(
         />
       </div>
     </el-drawer>
-  </MainLayout>
+  </section>
 </template>
