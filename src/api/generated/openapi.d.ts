@@ -4105,6 +4105,10 @@ export interface components {
             waybill: components["schemas"]["WaybillDraftDTO"];
         };
         DispatchOrderVO: {
+            /** Format: date-time */
+            acceptedAt?: string;
+            /** Format: date-time */
+            arrivedAt?: string;
             /** Format: int64 */
             assignedPilotId?: number;
             /** Format: int64 */
@@ -4116,6 +4120,8 @@ export interface components {
             /** Format: date-time */
             deliveredAt?: string;
             depositAmount?: number;
+            /** Format: date-time */
+            depositPaidAt?: string;
             executedDrone?: components["schemas"]["DispatchExecutedDroneVO"];
             fields?: {
                 [key: string]: string;
@@ -4133,6 +4139,8 @@ export interface components {
             startedAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /** Format: date-time */
+            waitingSince?: string;
         };
         DispatchPositionDTO: {
             /** Format: double */
