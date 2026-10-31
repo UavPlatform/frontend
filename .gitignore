@@ -28,4 +28,3 @@ test-results
 *.sw?
 .vercel
 .env*
-!.env.example

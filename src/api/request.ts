@@ -2,7 +2,6 @@ import axios from 'axios'
 import { clearStoredSession, getStoredSession, setStoredSession } from './session'
 import type { OkBody } from './contract'
 
-/** axios baseURL。未设 env 时默认 `/api`（本地 vite proxy）；生产例：`https://droneapi.fuwaki.icu/api` */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || '/api'
 
 const request = axios.create({
