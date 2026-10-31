@@ -16,6 +16,7 @@ import {
   Search,
   Sunny,
   SwitchButton,
+  DocumentChecked,
   Tickets,
   User,
 } from '@element-plus/icons-vue'
@@ -23,6 +24,7 @@ import { logout } from '../api/modules/auth'
 import { getStoredSession } from '../api/session'
 import { useTheme } from '../composables/useTheme'
 import { useFullscreen } from '../composables/useFullscreen'
+import EquipmentNotificationBell from '../components/EquipmentNotificationBell.vue'
 
 defineProps<{
   title: string
@@ -39,6 +41,7 @@ const menuItems = [
   { label: '用户', icon: User, route: 'users' },
   { label: '飞手', icon: Avatar, route: 'pilots' },
   { label: '无人机与机型', icon: Position, route: 'fleet' },
+  { label: '借机审批', icon: DocumentChecked, route: 'borrow-applications' },
   { label: '系统日志', icon: Notebook, route: 'system' },
 ]
 
@@ -62,6 +65,7 @@ const ROUTE_TITLES: Record<string, string> = {
   users: '用户',
   pilots: '飞手',
   fleet: '无人机与机型',
+  'borrow-applications': '借机审批',
   system: '系统日志',
   'order-detail': '订单详情',
   'user-detail': '用户详情',
@@ -276,6 +280,8 @@ const handleLogout = () => {
           </el-input>
 
 
+
+          <EquipmentNotificationBell />
 
           <el-tooltip :content="isDark ? '切换亮色' : '切换深色'">
             <button class="icon-btn" type="button" :aria-label="isDark ? '切换亮色' : '切换深色'" @click="toggle">

@@ -1,10 +1,20 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
 import MainLayout from '../../src/layouts/MainLayout.vue'
 import { setStoredSession, clearStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
+
+vi.mock('../../src/api/modules/admin-borrow', () => ({
+  getEquipmentNotifications: vi.fn().mockResolvedValue({ items: [], unreadCount: 0, page: 0, hasNext: false }),
+  readEquipmentNotification: vi.fn(),
+  getAdminBorrowApplications: vi.fn(),
+  approveAdminBorrowApplication: vi.fn(),
+  rejectAdminBorrowApplication: vi.fn(),
+  restoreAdminBorrowApplication: vi.fn(),
+  BORROW_STATUS_META: {},
+}))
 
 // TASK-FRONTEND-001：壳层主导航（大屏展示 + 首页/订单/用户/飞手 + 系统日志）
 // 菜单项通过 data-testid 定位（不依赖类名/文案），只断言行为：跳转与激活态。
@@ -15,6 +25,7 @@ const routes = [
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
   { path: '/fleet', name: 'fleet', component: { template: '<div />' } },
+  { path: '/borrow-applications', name: 'borrow-applications', component: { template: '<div />' } },
   { path: '/system', name: 'system', component: { template: '<div />' } },
 ]
 
@@ -53,6 +64,7 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
         'menu-users',
         'menu-pilots',
         'menu-fleet',
+        'menu-borrow-applications',
         'menu-system',
       ]),
     )
@@ -76,6 +88,9 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
 
     await clickMenu('menu-fleet')
     expect(router.currentRoute.value.name).toBe('fleet')
+
+    await clickMenu('menu-borrow-applications')
+    expect(router.currentRoute.value.name).toBe('borrow-applications')
 
     await clickMenu('menu-orders')
     expect(router.currentRoute.value.name).toBe('orders')

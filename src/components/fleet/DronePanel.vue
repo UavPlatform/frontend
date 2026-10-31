@@ -10,6 +10,7 @@ import {
   updateAdminDrone,
   type AdminDroneWrite,
 } from '../../api/modules/admin-drone'
+import { restoreAdminBorrowApplication, BORROW_STATUS_META } from '../../api/modules/admin-borrow'
 import { DISPATCH_STAGE_META } from '../../api/modules/admin-dispatch'
 import type { AdminAircraftModelVo, AdminDroneBorrowVo, AdminDroneVo } from '../../types/admin'
 import { fetchAllPages } from './fetch-all'
@@ -75,6 +76,7 @@ const borrowsDrone = ref<AdminDroneVo | null>(null)
 const borrows = ref<AdminDroneBorrowVo[]>([])
 const borrowsTotal = ref(0)
 const borrowsPage = ref(1)
+const restoringId = ref<string | null>(null)
 let borrowsSeq = 0
 
 const parseQuery = (query: Record<string, unknown>) => {
@@ -272,6 +274,30 @@ const loadBorrows = async () => {
     }
   } finally {
     if (seq === borrowsSeq) borrowsLoading.value = false
+  }
+}
+
+
+const restoreBorrow = async (row: AdminDroneBorrowVo) => {
+  if (!row.borrowId || restoringId.value) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将飞手 ${row.pilotName || (row.pilotId != null ? `#${row.pilotId}` : '')} 的归还记录改回「已借出」？仅在该机仍在库时可操作。`,
+      '误归还改回已借出',
+      { type: 'warning', confirmButtonText: '改回已借出', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  restoringId.value = row.borrowId
+  try {
+    await restoreAdminBorrowApplication(row.borrowId)
+    ElMessage.success('已改回已借出')
+    await Promise.all([loadBorrows(), load()])
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '改回已借出失败')
+  } finally {
+    restoringId.value = null
   }
 }
 
@@ -510,16 +536,43 @@ defineExpose({ load })
       destroy-on-close
     >
       <el-table v-loading="borrowsLoading" :data="borrows" border stripe size="small">
-        <el-table-column label="飞手" min-width="120">
+        <el-table-column label="飞手" min-width="110">
           <template #default="{ row }">
             {{ row.pilotName || (row.pilotId != null ? `#${row.pilotId}` : '—') }}
           </template>
         </el-table-column>
-        <el-table-column label="借出" min-width="150">
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              effect="plain"
+              :type="(BORROW_STATUS_META[row.status || '']?.tagType) || 'info'"
+            >
+              {{ BORROW_STATUS_META[row.status || '']?.label || row.status || '—' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="借出" min-width="140">
           <template #default="{ row }">{{ when(row.borrowedAt) }}</template>
         </el-table-column>
-        <el-table-column label="归还" min-width="150">
+        <el-table-column label="归还" min-width="140">
           <template #default="{ row }">{{ row.returnedAt ? when(row.returnedAt) : '未归还' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'RETURNED' && row.borrowId"
+              size="small"
+              type="warning"
+              plain
+              :loading="restoringId === row.borrowId"
+              :data-testid="`drone-borrow-restore-${row.borrowId}`"
+              @click="restoreBorrow(row)"
+            >
+              改回已借出
+            </el-button>
+            <span v-else class="text-[var(--text-faint)]">—</span>
+          </template>
         </el-table-column>
         <template #empty>
           <el-empty description="暂无借还记录" :image-size="64" />

@@ -11,6 +11,7 @@ const shellRoutes: Array<[path: string, name: string]> = [
   ['/users', 'users'],
   ['/pilots', 'pilots'],
   ['/fleet', 'fleet'],
+  ['/borrow-applications', 'borrow-applications'],
   ['/system', 'system'],
 ]
 
