@@ -12,7 +12,16 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-开发服务默认把 `/api` 和 `/ws` 代理至 `localhost:8081`。可通过 `VITE_API_BASE_URL` 设置 HTTP 接口前缀。生产部署需要配置 API 反向代理及 SPA history fallback，深链接必须回退到 `index.html`。不得把管理员密码、视频签名或后端密钥写入前端环境变量。
+开发服务默认把 `/api` 和 `/ws` 代理至 `localhost:8081`。未设置环境变量时，HTTP 默认前缀为 `/api`，WebSocket 走当前页面 host，二者都走本地 vite proxy。
+
+生产部署改为直连 API 子域名（不再经 Vercel rewrite 转发后端）：
+
+| 变量 | 含义 | 生产示例 |
+|---|---|---|
+| `VITE_API_BASE_URL` | axios `baseURL`，须含 `/api` 路径前缀 | `https://droneapi.fuwaki.icu/api` |
+| `VITE_WS_BASE_URL` | WebSocket 源站（可选；未设则从上面的绝对 API URL 推导） | `wss://droneapi.fuwaki.icu` |
+
+在 Vercel 项目环境变量中配置上述值后重新部署。`vercel.json` 仅保留 SPA history fallback（`/(.*)` → `index.html`），不再 rewrite `/api`、`/ws`。不得把管理员密码、视频签名或后端密钥写入前端环境变量。完整示例见仓库根目录 `.env.example`。
 
 ## 检查与测试
 

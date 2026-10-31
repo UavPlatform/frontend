@@ -160,11 +160,39 @@ export class WsConnection {
   }
 }
 
-function buildWsUrl(path: string): string {
+/**
+ * WS 源站：优先 VITE_WS_BASE_URL；否则从绝对 VITE_API_BASE_URL 推导 host；
+ * 都未设时用当前页面 host（本地 vite `/ws` proxy）。
+ * 允许写 `wss://…` 或 `https://…`（https → wss）。
+ */
+export function resolveWsOrigin(): string {
+  const explicit = import.meta.env.VITE_WS_BASE_URL?.trim()
+  if (explicit) {
+    return explicit
+      .replace(/\/$/, '')
+      .replace(/^http:\/\//i, 'ws://')
+      .replace(/^https:\/\//i, 'wss://')
+  }
+
+  const apiBase = import.meta.env.VITE_API_BASE_URL?.trim()
+  if (apiBase && /^https?:\/\//i.test(apiBase)) {
+    try {
+      const url = new URL(apiBase)
+      const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${protocol}//${url.host}`
+    } catch {
+      // fall through to page host
+    }
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}`
+}
+
+function buildWsUrl(path: string): string {
   const token = getStoredSession()?.token
   const query = token ? `?token=${encodeURIComponent(token)}` : ''
-  return `${protocol}//${window.location.host}${path}${query}`
+  return `${resolveWsOrigin()}${path}${query}`
 }
 
 let sharedConnection: WsConnection | null = null
