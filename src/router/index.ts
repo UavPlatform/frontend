@@ -71,6 +71,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/FleetView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    // 借机审批（REQ-SUP-GOV-007）：管理员审批飞手借机申请并指定机身号
+    path: '/borrow-applications',
+    name: 'borrow-applications',
+    component: () => import('../views/BorrowApplicationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
   // 旧入口合并到 /fleet
   { path: '/drones', redirect: (to) => ({ name: 'fleet', query: to.query }) },
   { path: '/aircraft-models', redirect: { name: 'fleet' } },

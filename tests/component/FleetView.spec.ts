@@ -28,6 +28,18 @@ vi.mock('../../src/api/modules/admin-drone', () => ({
   getAdminDroneBorrows: api.getAdminDroneBorrows,
 }))
 
+vi.mock('../../src/api/modules/admin-borrow', () => ({
+  restoreAdminBorrowApplication: vi.fn(),
+  getEquipmentNotifications: vi.fn().mockResolvedValue({ items: [], unreadCount: 0 }),
+  readEquipmentNotification: vi.fn(),
+  BORROW_STATUS_META: {
+    PENDING: { label: '待审批', tagType: 'warning' },
+    APPROVED: { label: '已借出', tagType: 'success' },
+    REJECTED: { label: '已驳回', tagType: 'danger' },
+    RETURNED: { label: '已归还', tagType: 'info' },
+  },
+}))
+
 vi.mock('../../src/api/modules/admin-aircraft-model', () => ({
   getAdminAircraftModels: api.getAdminAircraftModels,
   createAdminAircraftModel: api.createAdminAircraftModel,

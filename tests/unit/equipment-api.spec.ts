@@ -8,6 +8,16 @@ import {
   setAdminAircraftModelEnabled, updateAdminAircraftModel,
 } from '../../src/api/modules/admin-aircraft-model'
 
+import {
+  approveAdminBorrowApplication,
+  getAdminBorrowApplications,
+  getEquipmentNotifications,
+  readEquipmentNotification,
+  rejectAdminBorrowApplication,
+  restoreAdminBorrowApplication,
+} from '../../src/api/modules/admin-borrow'
+
+
 // Exercise the real typed contract facade and business envelope handling.
 const request = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(),
@@ -88,5 +98,69 @@ describe('admin drone and aircraft model API integration (REQ-SUP-GOV-005/006)',
     await expect(deleteAdminAircraftModel(1)).resolves.toBeUndefined()
     expect(request.delete).toHaveBeenLastCalledWith('/admin/aircraft-models/1', undefined)
     await expect(deleteAdminAircraftModel(1)).rejects.toMatchObject({ errorCode: 'INVALID_PARAM', message: '机型已被引用，请改为停用' })
+  })
+})
+
+describe('admin borrow application API (REQ-SUP-GOV-007)', () => {
+  beforeEach(() => { vi.resetAllMocks() })
+
+  it('lists applications with status filter and normalizes empty content', async () => {
+    request.get.mockResolvedValue(response({ totalElements: 0 }))
+    expect(await getAdminBorrowApplications({ status: 'PENDING', page: 0, size: 20 }))
+      .toEqual({ content: [], totalElements: 0 })
+    expect(request.get).toHaveBeenCalledWith('/admin/borrow-applications', {
+      params: { status: 'PENDING', page: 0, size: 20 },
+    })
+  })
+
+  it('approves with hand-picked droneId or random flag', async () => {
+    request.post.mockResolvedValue(response({ borrowId: 'b1', status: 'APPROVED' }))
+    expect(await approveAdminBorrowApplication('b1', { droneId: 'd1' }))
+      .toEqual({ borrowId: 'b1', status: 'APPROVED' })
+    expect(request.post).toHaveBeenLastCalledWith(
+      '/admin/borrow-applications/b1/approve',
+      { droneId: 'd1' },
+      undefined,
+    )
+    await approveAdminBorrowApplication('b/2', { random: true })
+    expect(request.post).toHaveBeenLastCalledWith(
+      '/admin/borrow-applications/b%2F2/approve',
+      { random: true },
+      undefined,
+    )
+  })
+
+  it('rejects with reason and restores mistaken returns', async () => {
+    request.post.mockResolvedValue(response({ borrowId: 'b1', status: 'REJECTED' }))
+    await rejectAdminBorrowApplication('b1', { reason: '库存不足' })
+    expect(request.post).toHaveBeenLastCalledWith(
+      '/admin/borrow-applications/b1/reject',
+      { reason: '库存不足' },
+      undefined,
+    )
+    request.post.mockResolvedValue(response({ borrowId: 'b1', status: 'APPROVED' }))
+    await restoreAdminBorrowApplication('b1')
+    expect(request.post).toHaveBeenLastCalledWith(
+      '/admin/borrow-applications/b1/restore',
+      null,
+      undefined,
+    )
+  })
+
+  it('loads equipment notifications and marks read', async () => {
+    request.get.mockResolvedValue(response({ items: [], unreadCount: 2, page: 0, hasNext: false }))
+    expect(await getEquipmentNotifications(0)).toEqual({
+      items: [], unreadCount: 2, page: 0, hasNext: false,
+    })
+    expect(request.get).toHaveBeenCalledWith('/equipment/notifications', {
+      params: { page: '0' },
+    })
+    request.post.mockResolvedValue(response(null))
+    await expect(readEquipmentNotification('n1')).resolves.toBeUndefined()
+    expect(request.post).toHaveBeenLastCalledWith(
+      '/equipment/notifications/n1/read',
+      null,
+      undefined,
+    )
   })
 })

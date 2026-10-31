@@ -67,7 +67,14 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['put', '/admin/drones/{droneId}'],
   ['post', '/admin/drones/{droneId}/enabled'],
   ['get', '/admin/drones/{droneId}/borrows'],
+  ['get', '/admin/borrow-applications'],
+  ['post', '/admin/borrow-applications/{borrowId}/approve'],
+  ['post', '/admin/borrow-applications/{borrowId}/reject'],
+  ['post', '/admin/borrow-applications/{borrowId}/restore'],
+  ['get', '/equipment/notifications'],
+  ['post', '/equipment/notifications/{notificationId}/read'],
 ]
+
 
 /** 门面自身与其运行时底座：这两个文件允许出现路径字面量与 axios 实例调用 */
 const FACADE_FILES = new Set(['api/contract.ts', 'api/request.ts'])

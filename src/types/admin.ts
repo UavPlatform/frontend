@@ -88,3 +88,12 @@ export type AdminDroneBorrowVo = Schemas['AdminDroneBorrowVO']
 
 /** 契约 ProviderDroneDTO：POST/PUT /admin/drones 请求体 */
 export type AdminDroneWriteDto = Schemas['ProviderDroneDTO']
+
+/** 契约 AdminBorrowApplicationVO：GET /admin/borrow-applications */
+export type AdminBorrowApplicationVo = Schemas['AdminBorrowApplicationVO']
+
+/** 契约 EquipmentNotificationVO：GET /equipment/notifications 列表项 */
+export type EquipmentNotificationVo = Schemas['EquipmentNotificationVO']
+
+/** 契约 EquipmentNotificationPageVO：GET /equipment/notifications */
+export type EquipmentNotificationPageVo = Schemas['EquipmentNotificationPageVO']

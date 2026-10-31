@@ -1,10 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import ElementPlus from 'element-plus'
 import MainLayout from '../../src/layouts/MainLayout.vue'
 import { setStoredSession, clearStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
+
+vi.mock('../../src/api/modules/admin-borrow', () => ({
+  getEquipmentNotifications: vi.fn().mockResolvedValue({ items: [], unreadCount: 0, page: 0, hasNext: false }),
+  readEquipmentNotification: vi.fn(),
+  BORROW_STATUS_META: {},
+}))
 
 const routes = [
   { path: '/', name: 'home', component: { template: '<div />' } },
@@ -14,6 +20,7 @@ const routes = [
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
   { path: '/fleet', name: 'fleet', component: { template: '<div />' } },
+  { path: '/borrow-applications', name: 'borrow-applications', component: { template: '<div />' } },
   { path: '/system', name: 'system', component: { template: '<div />' } },
 ]
 
