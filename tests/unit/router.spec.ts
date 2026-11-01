@@ -3,10 +3,9 @@ import router from '../../src/router'
 import { setStoredSession, clearStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
 
-// TASK-FRONTEND-001：壳层路由表——四项导航 + 次级系统页 + 大屏展示落地页；旧一级路由已删除
+// TASK-FRONTEND-001：壳层路由表——首页统一看板 + 订单/用户/飞手 + 次级系统页；旧一级路由已删除
 const shellRoutes: Array<[path: string, name: string]> = [
   ['/', 'home'],
-  ['/showcase', 'showcase'],
   ['/orders', 'orders'],
   ['/users', 'users'],
   ['/pilots', 'pilots'],
@@ -37,6 +36,12 @@ describe('壳层路由表（TASK-FRONTEND-001）', () => {
     for (const [path, name] of shellRoutes) {
       expect(router.resolve(path).name).toBe(name)
     }
+  })
+
+  it('旧独立大屏 /showcase 重定向到首页统一看板', async () => {
+    setStoredSession(adminSession)
+    await router.push('/showcase')
+    expect(router.currentRoute.value.name).toBe('home')
   })
 
   it('旧一级路由（records/operate/admin-center）已移除并回落首页', async () => {

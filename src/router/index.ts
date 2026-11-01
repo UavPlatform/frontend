@@ -12,11 +12,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
-    // 数据大屏展示：登录后默认落地页，4 屏自动轮播
+    // 旧独立大屏入口并入首页统一看板
     path: '/showcase',
-    name: 'showcase',
-    component: () => import('../views/ShowcaseView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    redirect: { name: 'home' },
   },
   {
     path: '/orders',

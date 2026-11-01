@@ -43,6 +43,14 @@
   --kpi-dispute-soft: #fffbeb;
   --kpi-pilot: #7c3aed;
   --kpi-pilot-soft: #f5f3ff;
+  --kpi-uav-total: #0f766e;
+  --kpi-uav-total-soft: #f0fdfa;
+  --kpi-uav-online: #0284c7;
+  --kpi-uav-online-soft: #f0f9ff;
+  --kpi-uav-available: #4f46e5;
+  --kpi-uav-available-soft: #eef2ff;
+  --kpi-uav-live: #e11d48;
+  --kpi-uav-live-soft: #fff1f2;
 
   /* 阴影 / 圆角（克制：以边框为主，阴影只做轻微层次） */
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
@@ -92,6 +100,14 @@ html.dark {
   --kpi-dispute-soft: rgba(251, 191, 36, 0.14);
   --kpi-pilot: #a78bfa;
   --kpi-pilot-soft: rgba(167, 139, 250, 0.14);
+  --kpi-uav-total: #2dd4bf;
+  --kpi-uav-total-soft: rgba(45, 212, 191, 0.14);
+  --kpi-uav-online: #38bdf8;
+  --kpi-uav-online-soft: rgba(56, 189, 248, 0.14);
+  --kpi-uav-available: #818cf8;
+  --kpi-uav-available-soft: rgba(129, 140, 248, 0.14);
+  --kpi-uav-live: #fb7185;
+  --kpi-uav-live-soft: rgba(251, 113, 133, 0.14);
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.5);
@@ -105,6 +121,7 @@ html,
 body,
 #app {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 body {

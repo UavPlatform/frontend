@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   Avatar,
   Close,
-  DataLine,
   DArrowLeft,
   DArrowRight,
   FullScreen,
@@ -35,7 +34,6 @@ const router = useRouter()
 const route = useRoute()
 
 const menuItems = [
-  { label: '大屏展示', icon: DataLine, route: 'showcase' },
   { label: '首页', icon: HomeFilled, route: 'home' },
   { label: '订单', icon: Tickets, route: 'orders' },
   { label: '用户', icon: User, route: 'users' },
@@ -59,7 +57,6 @@ const activeRoute = computed(() => {
 
 // ---- 已访问界面书签（浏览器式页签） ----
 const ROUTE_TITLES: Record<string, string> = {
-  showcase: '大屏展示',
   home: '首页',
   orders: '订单',
   users: '用户',
@@ -163,7 +160,7 @@ const toggleSidebar = () => {
 }
 const { isDark, toggle } = useTheme()
 
-// 全屏模式：隐藏侧边栏 + 顶栏 + 书签栏，仅保留内容区（大表格/长日志/大屏展示时用）
+// 全屏模式：隐藏侧边栏 + 顶栏 + 书签栏，仅保留内容区（投屏看板 / 大表格 / 长日志）
 const { isFullscreen: fullscreen, toggle: toggleFullscreen } = useFullscreen()
 
 const searchKeyword = ref('')
@@ -331,7 +328,7 @@ const handleLogout = () => {
       </div>
 
       <main class="content">
-        <div v-if="subtitle" class="content__subtitle">{{ subtitle }}</div>
+        <div v-if="subtitle && !fullscreen" class="content__subtitle">{{ subtitle }}</div>
         <slot />
       </main>
     </div>
@@ -353,6 +350,7 @@ const handleLogout = () => {
 .admin-shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -747,6 +745,11 @@ const handleLogout = () => {
   overflow-y: auto;
   padding: 20px;
   background: var(--bg-body);
+}
+
+.admin-shell:has(.fullscreen-exit) .content {
+  overflow: hidden;
+  padding: 12px 16px;
 }
 
 .content__subtitle {

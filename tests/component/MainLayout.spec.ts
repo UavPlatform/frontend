@@ -16,11 +16,10 @@ vi.mock('../../src/api/modules/admin-borrow', () => ({
   BORROW_STATUS_META: {},
 }))
 
-// TASK-FRONTEND-001：壳层主导航（大屏展示 + 首页/订单/用户/飞手 + 系统日志）
+// TASK-FRONTEND-001：壳层主导航（首页/订单/用户/飞手 + 系统日志）
 // 菜单项通过 data-testid 定位（不依赖类名/文案），只断言行为：跳转与激活态。
 const routes = [
   { path: '/', name: 'home', component: { template: '<div />' } },
-  { path: '/showcase', name: 'showcase', component: { template: '<div />' } },
   { path: '/orders', name: 'orders', component: { template: '<div />' } },
   { path: '/users', name: 'users', component: { template: '<div />' } },
   { path: '/pilots', name: 'pilots', component: { template: '<div />' } },
@@ -68,6 +67,7 @@ describe('MainLayout 监管壳层导航（TASK-FRONTEND-001）', () => {
         'menu-system',
       ]),
     )
+    expect(testids).not.toContain('menu-showcase')
   })
 
   it('点击菜单项切换到对应路由', async () => {
