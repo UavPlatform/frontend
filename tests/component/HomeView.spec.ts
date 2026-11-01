@@ -5,15 +5,23 @@ import HomeView from '../../src/views/HomeView.vue'
 import router from '../../src/router'
 import { clearStoredSession, setStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
+import { useFullscreen } from '../../src/composables/useFullscreen'
 
-const { getAdminDispatchOrders, getAdminComplaints, getAdminPilots, getOrderTrajectory, getUavPosition } =
-  vi.hoisted(() => ({
-    getAdminDispatchOrders: vi.fn(),
-    getAdminComplaints: vi.fn(),
-    getAdminPilots: vi.fn(),
-    getOrderTrajectory: vi.fn(),
-    getUavPosition: vi.fn(),
-  }))
+const {
+  getAdminDispatchOrders,
+  getAdminComplaints,
+  getAdminPilots,
+  getOrderTrajectory,
+  getUavPosition,
+  getAdminStatistics,
+} = vi.hoisted(() => ({
+  getAdminDispatchOrders: vi.fn(),
+  getAdminComplaints: vi.fn(),
+  getAdminPilots: vi.fn(),
+  getOrderTrajectory: vi.fn(),
+  getUavPosition: vi.fn(),
+  getAdminStatistics: vi.fn(),
+}))
 
 vi.mock('../../src/api/modules/admin-dispatch', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../src/api/modules/admin-dispatch')
@@ -24,6 +32,7 @@ vi.mock('../../src/api/modules/admin-query', async () => {
   return { ...actual, getAdminComplaints, getAdminPilots }
 })
 vi.mock('../../src/api/modules/uav', () => ({ getOrderTrajectory, getUavPosition }))
+vi.mock('../../src/api/modules/admin', () => ({ getAdminStatistics }))
 
 const pageOf = <T,>(content: T[], totalElements = content.length) => ({
   content,
@@ -65,6 +74,7 @@ beforeEach(async () => {
   })
   getAdminComplaints.mockResolvedValue({ complaints: [], totalElements: 0 })
   getAdminPilots.mockResolvedValue(pageOf([], 2))
+  getAdminStatistics.mockResolvedValue({ totalUavs: 12, onlineUavs: 5, availableUavs: 8, liveUavs: 3 })
   getOrderTrajectory.mockResolvedValue([
     { altitude: 10, speed: 1, battery: 90, timestamp: Date.now() - 60_000 },
     { altitude: 12, speed: 2, battery: 88, timestamp: Date.now() },
@@ -74,6 +84,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   while (mounted.length) mounted.pop()?.unmount()
+  const { isFullscreen, toggle } = useFullscreen()
+  if (isFullscreen.value) toggle()
   clearStoredSession()
   vi.clearAllMocks()
   vi.useRealTimers()
@@ -105,5 +117,34 @@ describe('HomeView dispatch flying board', () => {
     await vi.advanceTimersByTimeAsync(10_000)
     await flushPromises()
     expect(wrapper.text()).toMatch(/高度|电量|m\/s|%/)
+  })
+
+  it('renders UAV fleet metrics from getAdminStatistics', async () => {
+    const wrapper = await mountHome()
+    expect(wrapper.get('[data-testid="metric-uav-total"]').text()).toContain('12')
+    expect(wrapper.get('[data-testid="metric-uav-online"]').text()).toContain('5')
+    expect(wrapper.get('[data-testid="metric-uav-available"]').text()).toContain('8')
+    expect(wrapper.get('[data-testid="metric-uav-live"]').text()).toContain('3')
+    expect(getAdminStatistics).toHaveBeenCalledTimes(1)
+  })
+
+  it('cast toggle applies one-screen dashboard class via shared fullscreen state', async () => {
+    const wrapper = await mountHome()
+    expect(wrapper.get('[data-testid="home-dashboard"]').classes()).not.toContain('dash--cast')
+    await wrapper.get('[data-testid="home-cast-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="home-dashboard"]').classes()).toContain('dash--cast')
+    expect(wrapper.get('[data-testid="home-cast-toggle"]').text()).toContain('退出投屏')
+  })
+
+  it('empty flying state shows fleet snapshot instead of blank placeholder', async () => {
+    getAdminDispatchOrders.mockImplementation(async (params: { stage?: string }) => {
+      if (params.stage === 'IN_TRANSIT') return pageOf([])
+      return pageOf([])
+    })
+    const wrapper = await mountHome()
+    const empty = wrapper.get('[data-testid="flying-empty"]')
+    expect(empty.text()).toContain('当前无飞行作业')
+    expect(empty.text()).toMatch(/在线\s*5/)
+    expect(empty.text()).toMatch(/可用\s*8/)
   })
 })

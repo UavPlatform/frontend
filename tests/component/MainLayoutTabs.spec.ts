@@ -14,7 +14,6 @@ vi.mock('../../src/api/modules/admin-borrow', () => ({
 
 const routes = [
   { path: '/', name: 'home', component: { template: '<div />' } },
-  { path: '/showcase', name: 'showcase', component: { template: '<div />' } },
   { path: '/orders/:orderNum', name: 'order-detail', component: { template: '<div />' } },
   { path: '/orders', name: 'orders', component: { template: '<div />' } },
   { path: '/users', name: 'users', component: { template: '<div />' } },

@@ -5,36 +5,42 @@ import type { RouteLocationRaw } from 'vue-router'
 import {
   ArrowRight,
   Avatar,
+  FullScreen,
+  Monitor,
   Notebook,
   Position,
   Promotion,
   Refresh,
   Tickets,
   User,
+  VideoCamera,
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { forEachConcurrent } from '../utils/concurrency'
 import MainLayout from '../layouts/MainLayout.vue'
+import { getAdminStatistics } from '../api/modules/admin'
 import { getAdminComplaints, getAdminPilots } from '../api/modules/admin-query'
 import { getAdminDispatchOrders } from '../api/modules/admin-dispatch'
 import { getOrderTrajectory, getUavPosition } from '../api/modules/uav'
-import type { AdminComplaint, AdminDispatchOrderRow } from '../types/admin'
+import type { AdminComplaint, AdminDispatchOrderRow, AdminStatistics } from '../types/admin'
 import { formatClock, formatDuration } from '../utils/date'
 import {
   summarizePosition,
   summarizeTrajectory,
   type TelemetrySummary,
 } from '../utils/telemetry'
+import { useFullscreen } from '../composables/useFullscreen'
 
 /**
- * 首页看板（REQ-FRONTEND-001 §1）：
- *  A. 四指标卡（点击带筛选跳订单/飞手列表）；
- *  B. 正在飞行订单表格（路线/主体/遥测摘要 + [任务监管]/[详情]，轮询刷新遥测）；
- *  C. 侧栏快捷入口 + 待办 + 今日新发 Top5。
- * 无机队启停直播控件（ADR-0004 移除项）。
+ * 统一值守看板（原首页 + 独立大屏）：
+ *  A. 业务四指标 + UAV 四统计；
+ *  B. 正在飞行主表（派单域 IN_TRANSIT + 遥测轮询）；
+ *  C. 侧栏待办 / 今日新发 / 快捷入口同屏；
+ *  D. 投屏全屏：藏壳层后一屏 CSS Grid 锁高，无轮播。
  */
 const router = useRouter()
+const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
 interface FlyingCard {
   order: AdminDispatchOrderRow
@@ -78,6 +84,7 @@ const pendingComplaintTotal = ref<number | undefined>(undefined)
 const pendingComplaints = ref<AdminComplaint[]>([])
 const registeredRiders = ref<number | undefined>(undefined)
 const overdueWaiting = ref<{ total: number; example?: AdminDispatchOrderRow } | undefined>(undefined)
+const uavStats = ref<AdminStatistics | undefined>(undefined)
 
 /** 路由跳转（守卫重定向/重复导航的失败对用户无意义，静默忽略） */
 const go = (to: RouteLocationRaw) => {
@@ -89,6 +96,10 @@ const metricIcons: Record<string, Component> = {
   today: Tickets,
   dispute: WarningFilled,
   pilot: User,
+  'uav-total': Monitor,
+  'uav-online': Position,
+  'uav-available': Promotion,
+  'uav-live': VideoCamera,
 }
 
 const metrics = computed(() => [
@@ -119,6 +130,33 @@ const metrics = computed(() => [
     value: String(registeredRiders.value ?? '—'),
     hint: '注册飞手总数',
     to: { name: 'pilots' } satisfies RouteLocationRaw,
+  },
+])
+
+const fleetMetrics = computed(() => [
+  {
+    key: 'uav-total',
+    label: '无人机总数',
+    value: uavStats.value?.totalUavs != null ? String(uavStats.value.totalUavs) : '—',
+    hint: '机队规模',
+  },
+  {
+    key: 'uav-online',
+    label: '在线无人机',
+    value: uavStats.value?.onlineUavs != null ? String(uavStats.value.onlineUavs) : '—',
+    hint: '当前在线',
+  },
+  {
+    key: 'uav-available',
+    label: '可用无人机',
+    value: uavStats.value?.availableUavs != null ? String(uavStats.value.availableUavs) : '—',
+    hint: '可派任务',
+  },
+  {
+    key: 'uav-live',
+    label: '直播中',
+    value: uavStats.value?.liveUavs != null ? String(uavStats.value.liveUavs) : '—',
+    hint: '图传进行中',
   },
 ])
 
@@ -297,7 +335,7 @@ const load = async () => {
     const midnight = new Date()
     midnight.setHours(0, 0, 0, 0)
 
-    const [inProgress, todayPage, complaints, riders, waitingPage] = await Promise.all([
+    const [inProgress, todayPage, complaints, riders, waitingPage, statistics] = await Promise.all([
       getAdminDispatchOrders({ page: 0, size: 100, stage: 'IN_TRANSIT' }),
       getAdminDispatchOrders({ page: 0, size: 5, createdFrom: midnight.toISOString() }),
       getAdminComplaints({ page: 0, size: 10, status: 'PENDING' }).catch(() => null),
@@ -308,6 +346,7 @@ const load = async () => {
         stage: 'DELIVERY_CONFIRMATION',
         createdTo: new Date(Date.now() - 24 * 3_600_000).toISOString(),
       }).catch(() => null),
+      getAdminStatistics().catch(() => null),
     ])
     if (seq !== loadSeq) return
 
@@ -327,6 +366,7 @@ const load = async () => {
           example: waitingPage.content?.[0],
         }
       : undefined
+    uavStats.value = statistics ?? undefined
 
     await refreshTelemetry()
     if (seq !== loadSeq) return
@@ -357,21 +397,29 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
 </script>
 
 <template>
-  <MainLayout title="首页" subtitle="值守第一屏：平台指标、正在飞行订单与快捷入口。">
-    <div class="dash">
-      <!-- 工具栏 -->
+  <MainLayout title="首页" subtitle="统一值守看板：平台指标、UAV 状态、飞行订单与待办同屏。">
+    <div class="dash" :class="{ 'dash--cast': isFullscreen }" data-testid="home-dashboard">
       <div class="dash__toolbar">
-        <span class="dash__updated">更新于 {{ updatedAt }}</span>
-        <el-button size="small" :loading="loading" @click="load">
-          <el-icon class="mr-1"><Refresh /></el-icon>
-          刷新
-        </el-button>
+        <div class="dash__brand">
+          <span class="dash__eyebrow">值守看板</span>
+          <span class="dash__updated">更新于 {{ updatedAt }}</span>
+        </div>
+        <div class="dash__actions">
+          <el-button size="small" data-testid="home-cast-toggle" @click="toggleFullscreen">
+            <el-icon class="mr-1"><FullScreen /></el-icon>
+            {{ isFullscreen ? '退出投屏' : '投屏全屏' }}
+          </el-button>
+          <el-button size="small" :loading="loading" @click="load">
+            <el-icon class="mr-1"><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </div>
       </div>
 
       <el-alert v-if="loadError" :title="loadError + '，请点击刷新重试。已有数据可能已过期。'" type="error" :closable="false" />
       <el-alert v-if="scanTruncated" title="部分数据未加载完整，今日订单显示已加载数量，飞行列表仅展示部分任务。" type="warning" :closable="false" />
-      <!-- 指标卡 -->
-      <div class="stat-grid">
+
+      <div class="stat-grid" data-testid="ops-metrics">
         <button
           v-for="metric in metrics"
           :key="metric.key"
@@ -391,9 +439,28 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
         </button>
       </div>
 
-      <!-- 主区 + 侧栏 -->
+      <div class="stat-grid stat-grid--fleet" data-testid="fleet-metrics">
+        <button
+          v-for="metric in fleetMetrics"
+          :key="metric.key"
+          type="button"
+          class="kpi kpi--fleet"
+          :data-testid="`metric-${metric.key}`"
+          @click="go({ name: 'fleet' })"
+        >
+          <div class="kpi__top">
+            <span class="kpi__icon" :class="`kpi__icon--${metric.key}`">
+              <el-icon><component :is="metricIcons[metric.key]" /></el-icon>
+            </span>
+            <span class="kpi__label">{{ metric.label }}</span>
+          </div>
+          <div class="kpi__value tabular-nums">{{ metric.value }}</div>
+          <div class="kpi__meta">{{ metric.hint }}</div>
+        </button>
+      </div>
+
       <div class="dash-grid">
-        <section class="panel-card panel">
+        <section class="panel-card panel panel--flying">
           <div class="panel__head">
             <div class="panel__title">
               <span class="live-dot"></span>
@@ -405,91 +472,150 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
             </el-tag>
           </div>
 
-          <el-table v-if="flyingCards?.length" :data="flyingCards" size="small" data-testid="flying-table">
-            <el-table-column label="订单" min-width="150">
-              <template #default="{ row }">
-                <div class="order-cell">
-                  <span class="live-dot live-dot--sm"></span>
-                  <span class="order-num tabular-nums">{{ row.order.orderId || '暂无订单号' }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="执行机型" min-width="140" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.order.executedModelName || '—' }}</template>
-            </el-table-column>
-            <el-table-column label="用户" min-width="90">
-              <template #default="{ row }">
-                <button
-                  type="button"
-                  class="link"
-                  @click="go({ name: 'users', query: row.order.shipper?.userId ? { id: String(row.order.shipper?.userId) } : {} })"
-                >
-                  {{ row.order.shipper?.userName || '—' }}
-                </button>
-              </template>
-            </el-table-column>
-            <el-table-column label="飞手" min-width="90">
-              <template #default="{ row }">
-                <button
-                  type="button"
-                  class="link"
-                  @click="go({ name: 'pilots', query: row.order.pilot?.userName ? { q: row.order.pilot?.userName } : {} })"
-                >
-                  {{ row.order.pilot?.userName || '—' }}
-                </button>
-              </template>
-            </el-table-column>
-            <el-table-column label="定金" width="110" align="right">
-              <template #default="{ row }">
-                <span class="amount tabular-nums">{{ formatAmount(row.order.depositAmount) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="遥测" min-width="190">
-              <template #default="{ row }">
-                <span class="telemetry" :title="telemetrySummary(row)">
-                  {{ telemetrySummary(row) }}
-                </span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="132" fixed="right">
-              <template #default="{ row }">
-                <el-button
-                  v-if="row.order.orderId"
-                  size="small"
-                  type="primary"
-                  link
-                  @click="go({ name: 'order-supervise', params: { orderNum: row.order.orderId } })"
-                >
-                  监管
-                </el-button>
-                <el-button
-                  v-if="row.order.orderId"
-                  size="small"
-                  link
-                  @click="openOrderDetail(row.order.orderId)"
-                >
-                  详情
-                </el-button>
-                <span v-else class="text-xs" style="color: var(--text-faint)">订单生成中</span>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div v-if="flyingCards?.length" class="panel__body">
+            <el-table :data="flyingCards" size="small" height="100%" data-testid="flying-table">
+              <el-table-column label="订单" min-width="150">
+                <template #default="{ row }">
+                  <div class="order-cell">
+                    <span class="live-dot live-dot--sm"></span>
+                    <span class="order-num tabular-nums">{{ row.order.orderId || '暂无订单号' }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="执行机型" min-width="140" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.order.executedModelName || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="用户" min-width="90">
+                <template #default="{ row }">
+                  <button
+                    type="button"
+                    class="link"
+                    @click="go({ name: 'users', query: row.order.shipper?.userId ? { id: String(row.order.shipper?.userId) } : {} })"
+                  >
+                    {{ row.order.shipper?.userName || '—' }}
+                  </button>
+                </template>
+              </el-table-column>
+              <el-table-column label="飞手" min-width="90">
+                <template #default="{ row }">
+                  <button
+                    type="button"
+                    class="link"
+                    @click="go({ name: 'pilots', query: row.order.pilot?.userName ? { q: row.order.pilot?.userName } : {} })"
+                  >
+                    {{ row.order.pilot?.userName || '—' }}
+                  </button>
+                </template>
+              </el-table-column>
+              <el-table-column label="定金" width="110" align="right">
+                <template #default="{ row }">
+                  <span class="amount tabular-nums">{{ formatAmount(row.order.depositAmount) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="遥测" min-width="190">
+                <template #default="{ row }">
+                  <span class="telemetry" :title="telemetrySummary(row)">
+                    {{ telemetrySummary(row) }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="132" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="row.order.orderId"
+                    size="small"
+                    type="primary"
+                    link
+                    @click="go({ name: 'order-supervise', params: { orderNum: row.order.orderId } })"
+                  >
+                    监管
+                  </el-button>
+                  <el-button
+                    v-if="row.order.orderId"
+                    size="small"
+                    link
+                    @click="openOrderDetail(row.order.orderId)"
+                  >
+                    详情
+                  </el-button>
+                  <span v-else class="text-xs" style="color: var(--text-faint)">订单生成中</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
 
-          <div v-else-if="!loading && !loadError" class="map-placeholder">
-            <div class="map-placeholder__grid"></div>
-            <div class="map-placeholder__center">
-              <span class="map-placeholder__icon"><el-icon><Position /></el-icon></span>
-              <span class="map-placeholder__title">当前无飞行作业</span>
-              <span class="map-placeholder__desc">可前往订单列表查看任务与履约记录</span>
-              <el-button type="primary" plain size="small" @click="go({ name: 'orders' })">
-                查看全部订单
-              </el-button>
+          <div v-else-if="!loading && !loadError" class="empty-flight" data-testid="flying-empty">
+            <div class="empty-flight__visual" aria-hidden="true">
+              <div class="empty-flight__grid"></div>
+              <span class="empty-flight__icon"><el-icon><Position /></el-icon></span>
+            </div>
+            <div class="empty-flight__copy">
+              <div class="empty-flight__title">当前无飞行作业</div>
+              <div class="empty-flight__desc">
+                机队待命中：在线 {{ uavStats?.onlineUavs ?? '—' }} /
+                可用 {{ uavStats?.availableUavs ?? '—' }} /
+                直播 {{ uavStats?.liveUavs ?? '—' }}
+              </div>
+              <div class="empty-flight__actions">
+                <el-button type="primary" plain size="small" @click="go({ name: 'orders' })">
+                  查看全部订单
+                </el-button>
+                <el-button plain size="small" @click="go({ name: 'fleet' })">
+                  查看机队
+                </el-button>
+              </div>
             </div>
           </div>
         </section>
 
         <aside class="rail">
           <section class="panel-card panel">
+            <div class="panel__title">待办</div>
+            <div v-if="todos.length > 0" class="todo-list">
+              <button
+                v-for="item in todos"
+                :key="item.key"
+                type="button"
+                class="todo"
+                @click="go(item.to)"
+              >
+                <span class="todo__dot" :class="`todo__dot--${item.key}`"></span>
+                <span class="todo__body">
+                  <span class="todo__title">{{ item.title }}</span>
+                  <span class="todo__detail">{{ item.detail }}</span>
+                </span>
+                <el-icon class="todo__arrow"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <div v-else class="rail-empty">暂无紧急待办</div>
+          </section>
+
+          <section class="panel-card panel panel--today">
+            <div class="panel__head">
+              <div class="panel__title">今日新发</div>
+              <button type="button" class="link" @click="go({ name: 'orders', query: { date: 'today' } })">
+                全部
+                <el-icon class="ml-1"><ArrowRight /></el-icon>
+              </button>
+            </div>
+            <el-table
+              v-if="todayTop5.length"
+              :data="todayTop5"
+              size="small"
+              data-testid="today-table"
+              @row-click="(row: AdminDispatchOrderRow) => openOrderDetail(row.orderId)"
+            >
+              <el-table-column prop="orderId" label="订单号" min-width="120" show-overflow-tooltip />
+              <el-table-column label="状态" width="96">
+                <template #default="scope">
+                  {{ orderStatusLabel(scope.row) }}
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-else class="rail-empty">今日暂无新单</div>
+          </section>
+
+          <section class="panel-card panel panel--quick">
             <div class="panel__title">快捷操作</div>
             <div class="quick-grid">
               <button
@@ -506,53 +632,8 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
               </button>
             </div>
           </section>
-
-          <section v-if="todos.length > 0" class="panel-card panel">
-            <div class="panel__title">待办</div>
-            <div class="todo-list">
-              <button
-                v-for="item in todos"
-                :key="item.key"
-                type="button"
-                class="todo"
-                @click="go(item.to)"
-              >
-                <span class="todo__dot" :class="`todo__dot--${item.key}`"></span>
-                <span class="todo__body">
-                  <span class="todo__title">{{ item.title }}</span>
-                  <span class="todo__detail">{{ item.detail }}</span>
-                </span>
-                <el-icon class="todo__arrow"><ArrowRight /></el-icon>
-              </button>
-            </div>
-          </section>
         </aside>
       </div>
-
-      <!-- 今日新发 -->
-      <section v-if="todayOrders?.length" class="panel-card panel">
-        <div class="panel__head">
-          <div class="panel__title">今日新发</div>
-          <button type="button" class="link" @click="go({ name: 'orders', query: { date: 'today' } })">
-            查看全部
-            <el-icon class="ml-1"><ArrowRight /></el-icon>
-          </button>
-        </div>
-        <el-table :data="todayTop5" size="small" data-testid="today-table" @row-click="(row: AdminDispatchOrderRow) => openOrderDetail(row.orderId)">
-          <el-table-column prop="orderId" label="订单号" min-width="150" />
-          <el-table-column label="货主" min-width="90"><template #default="{ row }">{{ row.shipper?.userName || '—' }}</template></el-table-column>
-          <el-table-column label="状态" width="120">
-            <template #default="scope">
-              {{ orderStatusLabel(scope.row) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="定金" width="110" align="right">
-            <template #default="scope">
-              <span class="amount tabular-nums">{{ formatAmount(scope.row.depositAmount) }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
-      </section>
     </div>
   </MainLayout>
 </template>
@@ -561,15 +642,36 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
 .dash {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+.dash--cast {
+  height: calc(100dvh - 24px);
+  min-height: 0;
+  overflow: hidden;
+  gap: 10px;
 }
 
 .dash__toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
-  height: 28px;
+  min-height: 32px;
+}
+
+.dash__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dash__eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
 }
 
 .dash__updated {
@@ -578,11 +680,20 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- 指标卡 ---------- */
+.dash__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.stat-grid--fleet {
+  gap: 10px;
 }
 
 .kpi {
@@ -597,6 +708,11 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   flex-direction: column;
   gap: 10px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.kpi--fleet {
+  padding: 12px 14px;
+  gap: 8px;
 }
 
 .kpi:hover {
@@ -625,6 +741,10 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
 .kpi__icon--today { background: var(--kpi-today-soft); color: var(--kpi-today); }
 .kpi__icon--dispute { background: var(--kpi-dispute-soft); color: var(--kpi-dispute); }
 .kpi__icon--pilot { background: var(--kpi-pilot-soft); color: var(--kpi-pilot); }
+.kpi__icon--uav-total { background: var(--kpi-uav-total-soft); color: var(--kpi-uav-total); }
+.kpi__icon--uav-online { background: var(--kpi-uav-online-soft); color: var(--kpi-uav-online); }
+.kpi__icon--uav-available { background: var(--kpi-uav-available-soft); color: var(--kpi-uav-available); }
+.kpi__icon--uav-live { background: var(--kpi-uav-live-soft); color: var(--kpi-uav-live); }
 
 .kpi__label {
   font-size: 13px;
@@ -639,6 +759,10 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   color: var(--text-strong);
 }
 
+.kpi--fleet .kpi__value {
+  font-size: 22px;
+}
+
 .kpi__meta {
   display: flex;
   align-items: center;
@@ -649,9 +773,15 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   border-top: 1px solid var(--border);
 }
 
-/* ---------- 面板通用 ---------- */
 .panel {
   padding: 14px 16px;
+}
+
+.panel--flying {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
 }
 
 .panel__head {
@@ -685,7 +815,11 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   font-weight: 600;
 }
 
-/* ---------- 飞行状态点 ---------- */
+.panel__body {
+  flex: 1;
+  min-height: 0;
+}
+
 .live-dot {
   width: 8px;
   height: 8px;
@@ -747,103 +881,133 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   text-decoration: underline;
 }
 
-/* ---------- 地图占位 ---------- */
-.map-placeholder {
-  position: relative;
-  height: 320px;
+.empty-flight {
+  flex: 1;
+  min-height: 280px;
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
   overflow: hidden;
-  background: #0b1220;
+  background: var(--bg-sunken);
 }
 
-.map-placeholder__grid {
+.empty-flight__visual {
+  position: relative;
+  background: #0b1220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-flight__grid {
   position: absolute;
   inset: 0;
   background-image:
     linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
     linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-size: 28px 28px;
 }
 
-.map-placeholder__center {
+.empty-flight__icon {
   position: relative;
-  height: 100%;
+  font-size: 34px;
+  color: #60a5fa;
+}
+
+.empty-flight__copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 18px 18px 18px 4px;
 }
 
-.map-placeholder__icon {
-  font-size: 30px;
-  color: #3b82f6;
-}
-
-.map-placeholder__title {
-  font-size: 14px;
+.empty-flight__title {
+  font-size: 16px;
   font-weight: 600;
-  color: #cbd5e1;
-}
-
-.map-placeholder__desc {
-  font-size: 12px;
-  color: #64748b;
-  margin-bottom: 4px;
-}
-
-/* ---------- 空状态 ---------- */
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 32px 16px;
-  text-align: center;
-}
-
-.empty__icon {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: var(--bg-sunken);
-  color: var(--text-faint);
-  font-size: 22px;
-  margin-bottom: 4px;
-}
-
-.empty__title {
-  font-size: 14px;
-  font-weight: 500;
   color: var(--text-strong);
 }
 
-.empty__desc {
-  font-size: 12px;
-  color: var(--text-faint);
-  margin-bottom: 8px;
+.empty-flight__desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
-/* ---------- 主次两栏 ---------- */
+.empty-flight__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .dash-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
   align-items: start;
+}
+
+.dash--cast .dash-grid {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.dash--cast .panel--flying {
+  min-height: 0;
+  height: 100%;
+}
+
+.dash--cast .rail {
+  min-height: 0;
+  overflow: auto;
+}
+
+.dash--cast .kpi__value {
+  font-size: 30px;
+}
+
+.dash--cast .kpi--fleet .kpi__value {
+  font-size: 24px;
+}
+
+.dash--cast .kpi__label,
+.dash--cast .panel__title,
+.dash--cast .todo__title,
+.dash--cast .empty-flight__title {
+  color: var(--text-strong);
+}
+
+.dash--cast .kpi__label {
+  font-size: 14px;
+}
+
+.dash--cast .panel__title {
+  font-size: 15px;
 }
 
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
 }
 
-/* ---------- 快捷操作 ---------- */
+.rail-empty {
+  margin-top: 10px;
+  padding: 14px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-inner);
+  background: var(--bg-sunken);
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -884,7 +1048,6 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   color: var(--text-regular);
 }
 
-/* ---------- 待办 ---------- */
 .todo-list {
   display: flex;
   flex-direction: column;
@@ -948,22 +1111,46 @@ const formatAmount = (value?: number) => (value == null ? '—' : `¥${value.toF
   color: var(--text-faint);
 }
 
-/* ---------- 响应式 ---------- */
 @media (max-width: 1200px) {
   .dash-grid {
     grid-template-columns: 1fr;
   }
+
+  .dash--cast {
+    height: auto;
+    overflow: auto;
+  }
 }
 
 @media (max-width: 1024px) {
-  .stat-grid {
+  .stat-grid,
+  .stat-grid--fleet {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 640px) {
-  .stat-grid {
+@media (max-width: 720px) {
+  .empty-flight {
     grid-template-columns: 1fr;
+  }
+
+  .empty-flight__visual {
+    min-height: 120px;
+  }
+
+  .empty-flight__copy {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .stat-grid,
+  .stat-grid--fleet {
+    grid-template-columns: 1fr;
+  }
+
+  .dash__toolbar {
+    flex-wrap: wrap;
   }
 }
 </style>

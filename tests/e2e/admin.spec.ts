@@ -60,7 +60,9 @@ test('管理员登录进入可用首页，隐藏未完成入口', async ({ page 
   await expect(page).toHaveURL('http://127.0.0.1:4173/')
   await expect(page.getByTestId('metric-pilot')).toContainText('在册飞手')
   await expect(page.getByTestId('metric-pilot')).toContainText('2')
-  await expect(page.getByTestId('menu-showcase')).toBeVisible()
+  await expect(page.getByTestId('menu-home')).toBeVisible()
+  await expect(page.getByTestId('menu-showcase')).toHaveCount(0)
+  await expect(page.getByTestId('fleet-metrics')).toBeVisible()
   await expect(page.getByRole('button', { name: '通知', exact: true })).toHaveCount(0)
 })
 
