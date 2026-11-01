@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import MainLayout from '../layouts/MainLayout.vue'
 import RelatedOrdersTable from '../components/subject/RelatedOrdersTable.vue'
 import { getAdminPilotDetail } from '../api/modules/admin-query'
-import { updateUavAvailable } from '../api/modules/admin'
-import type { AdminPilotDetailVo, AdminPilotDroneVo } from '../types/admin'
+import {
+  BORROW_STATUS_META,
+  getAdminBorrowApplications,
+} from '../api/modules/admin-borrow'
+import { fetchAllPages } from '../components/fleet/fetch-all'
+import type { AdminBorrowApplicationVo, AdminPilotDetailVo } from '../types/admin'
 
 /**
- * 飞手详情（REQ-FRONTEND-001 §4.2、ADR-0004）：
- * 实名信息（身份证脱敏/有效期）+ 驾驶资质 + 绑定无人机表（djiId / 机型 / 在线 / 可用）
- * + 启停开关（POST /admin/uav/available）+ 关联订单。
- * 无人机不设一级菜单：归属与合规开关只在这里维护。
+ * 飞手详情（REQ-SUP-GOV-004 / REQ-PILOT-EXEC-005 / REQ-SUP-GOV-007）：
+ * 实名信息 + 驾驶资质 + 借用记录（借机申请按 pilotId 过滤）+ 关联订单。
+ * 不再展示绑定自有机 / 启停开关。
  */
 const route = useRoute()
 const router = useRouter()
@@ -21,8 +24,9 @@ const userId = computed(() => String(route.params.id ?? ''))
 
 const detail = ref<AdminPilotDetailVo>()
 const loading = ref(false)
-/** 正在提交启停请求的 djiId（同一设备锁住开关，避免重复提交） */
-const toggling = ref('')
+const borrows = ref<AdminBorrowApplicationVo[]>([])
+const borrowsLoading = ref(false)
+const borrowsTruncated = ref(false)
 
 const ROLE_LABEL: Record<number, string> = {
   0: '普通用户',
@@ -30,29 +34,68 @@ const ROLE_LABEL: Record<number, string> = {
   2: '管理员',
 }
 
+const when = (value?: string | null) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+const statusMeta = (status?: string | null) =>
+  BORROW_STATUS_META[status ?? ''] ?? { label: status || '—', tagType: 'info' as const }
+
+const airframeLabel = (row: AdminBorrowApplicationVo) =>
+  row.serialNumber || row.droneId || '—'
+
 let loadSeq = 0
 const reload = async () => {
   const seq = ++loadSeq
   detail.value = undefined
+  borrows.value = []
+  borrowsTruncated.value = false
   if (!/^\d+$/.test(userId.value)) {
     ElMessage.warning('飞手 ID 无效')
     loading.value = false
+    borrowsLoading.value = false
     return
   }
   loading.value = true
-  try {
-    const data = await getAdminPilotDetail(userId.value)
-    if (seq !== loadSeq) return
-    detail.value = data
-  } catch (err) {
-    if (seq === loadSeq) {
-      ElMessage.error(err instanceof Error ? err.message : '查询飞手详情失败')
-    }
-  } finally {
-    if (seq === loadSeq) {
-      loading.value = false
-    }
-  }
+  borrowsLoading.value = true
+  const currentId = userId.value
+  const pilotId = Number(currentId)
+
+  const detailPromise = getAdminPilotDetail(currentId)
+    .then((data) => {
+      if (seq !== loadSeq) return
+      detail.value = data
+    })
+    .catch((err) => {
+      if (seq === loadSeq) {
+        ElMessage.error(err instanceof Error ? err.message : '查询飞手详情失败')
+      }
+    })
+    .finally(() => {
+      if (seq === loadSeq) loading.value = false
+    })
+
+  // 契约 GET /admin/borrow-applications 无 pilotId 过滤，拉全量后前端按飞手过滤
+  const borrowsPromise = fetchAllPages((page, size) =>
+    getAdminBorrowApplications({ page, size }),
+  )
+    .then((result) => {
+      if (seq !== loadSeq) return
+      borrows.value = result.items.filter((row) => row.pilotId === pilotId)
+      borrowsTruncated.value = result.truncated
+    })
+    .catch((err) => {
+      if (seq === loadSeq) {
+        ElMessage.error(err instanceof Error ? err.message : '查询借用记录失败')
+      }
+    })
+    .finally(() => {
+      if (seq === loadSeq) borrowsLoading.value = false
+    })
+
+  await Promise.all([detailPromise, borrowsPromise])
 }
 
 watch(userId, reload, { immediate: true })
@@ -61,53 +104,16 @@ const backToList = () => {
   void router.push({ name: 'pilots' }).catch(() => undefined)
 }
 
-const drones = computed(() => detail.value?.drones ?? [])
 const qualifications = computed(() => detail.value?.qualifications ?? [])
 
-/** available=null（设备档案未注册）→ 开关禁用 + 提示，不发请求 */
-const unregisteredCount = computed(
-  () => drones.value.filter((drone) => drone.available === null || drone.available === undefined)
-    .length,
-)
-
-const isDroneDisabled = (drone: AdminPilotDroneVo) =>
-  drone.available === null ||
-  drone.available === undefined ||
-  !drone.djiId ||
-  Boolean(toggling.value)
-
-const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
-  if (toggling.value) return
-  if (drone.available === null || drone.available === undefined) {
-    ElMessage.warning('该设备未注册档案，无法修改可用状态')
-    return
-  }
-  if (!drone.djiId) {
-    ElMessage.warning('该设备缺少 DJI 设备ID，无法修改可用状态')
-    return
-  }
-
-  toggling.value = drone.djiId
-  try {
-    const pilotId = userId.value
-    try {
-      await ElMessageBox.confirm(`确认${next ? '启用' : '禁用'}无人机 ${drone.djiId}？这将修改设备的可用状态。`,
-        '确认设备状态变更', { type: 'warning', confirmButtonText: '确认修改', cancelButtonText: '取消' })
-    } catch { return }
-    if (userId.value !== pilotId) return
-    await updateUavAvailable(drone.djiId, next ? '1' : '0')
-    ElMessage.success(next ? '无人机已启用' : '无人机已禁用')
-    await reload()
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '修改可用状态失败')
-  } finally {
-    toggling.value = ''
-  }
+const openOrder = (orderId?: string | null) => {
+  if (!orderId) return
+  void router.push({ name: 'order-detail', params: { orderNum: orderId } }).catch(() => undefined)
 }
 </script>
 
 <template>
-  <MainLayout title="飞手详情" subtitle="绑定无人机的归属与合规开关、名下履约订单。">
+  <MainLayout title="飞手详情" subtitle="实名与资质、借用记录、名下履约订单。">
     <div class="flex flex-col gap-4">
       <section class="panel-card p-5" v-loading="loading">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -125,7 +131,7 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
             </el-tag>
           </div>
           <div class="flex items-center gap-2">
-            <el-button :loading="loading" @click="reload">刷新</el-button>
+            <el-button :loading="loading || borrowsLoading" @click="reload">刷新</el-button>
             <el-button @click="backToList">返回飞手列表</el-button>
           </div>
         </div>
@@ -144,8 +150,8 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
           <el-descriptions-item label="累计完成单">
             {{ detail.completedCount ?? 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="绑定无人机">
-            {{ drones.length }} 架（在线 {{ drones.filter((d) => d.online).length }} 架）
+          <el-descriptions-item label="借用记录">
+            {{ borrows.length }} 条
           </el-descriptions-item>
           <el-descriptions-item label="身份证号">
             <span data-testid="pilot-id-number">{{ detail.idNumberMasked || '未登记' }}</span>
@@ -188,69 +194,74 @@ const toggleAvailable = async (drone: AdminPilotDroneVo, next: boolean) => {
         <el-empty v-else description="该飞手尚未登记驾驶资质" :image-size="60" />
       </section>
 
-      <!-- 绑定无人机（ADR-0004：无人机不设一级菜单，启停只在此处） -->
-      <section v-if="detail" class="panel-card p-5">
+      <!-- 借用记录（REQ-SUP-GOV-004：详情展示借用记录，不再显示绑定无人机） -->
+      <section v-if="detail" class="panel-card p-5" data-testid="pilot-borrow-records">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <div class="section-title">绑定无人机</div>
-          <div class="text-xs text-[var(--text-secondary)]">共 {{ drones.length }} 架</div>
+          <div class="section-title">借用记录</div>
+          <div class="text-xs text-[var(--text-secondary)]">共 {{ borrows.length }} 条</div>
         </div>
 
         <el-alert
-          v-if="unregisteredCount > 0"
+          v-if="borrowsTruncated"
           class="mt-3"
           type="warning"
           :closable="false"
-          :title="`其中 ${unregisteredCount} 架设备档案未注册，开关已禁用；请先在设备侧注册档案后再启停`"
+          title="借用申请列表过长，仅展示前若干页；如需完整数据请到「借机审批」筛选。"
         />
 
         <el-table
-          v-if="drones.length"
+          v-loading="borrowsLoading"
           class="mt-3"
-          :data="drones"
+          :data="borrows"
           border
           stripe
+          data-testid="pilot-borrow-table"
         >
-          <el-table-column label="DJI ID" min-width="170">
-            <template #default="scope">
-              {{ scope.row.djiId || '—' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="机型" min-width="160">
-            <template #default="scope">
-              {{ scope.row.modelName || '未映射' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="在线" width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.online ? 'success' : 'info'" effect="plain">
-                {{ scope.row.online ? '在线' : '离线' }}
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="statusMeta(row.status).tagType" effect="plain">
+                {{ statusMeta(row.status).label }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="可用" width="170">
-            <template #default="scope">
-              <div class="flex items-center gap-2">
-                <el-switch
-                  :model-value="scope.row.available === true"
-                  :disabled="isDroneDisabled(scope.row)"
-                  :loading="toggling === scope.row.djiId"
-                  @change="(value: string | number | boolean) => toggleAvailable(scope.row, value === true)"
-                />
-                <span
-                  v-if="scope.row.available === null || scope.row.available === undefined"
-                  class="text-xs text-[var(--text-secondary)]"
-                >
-                  未注册
-                </span>
-                <span v-else class="text-xs text-[var(--text-secondary)]">
-                  {{ scope.row.available ? '已启用' : '已禁用' }}
-                </span>
-              </div>
+          <el-table-column label="机型" min-width="160">
+            <template #default="{ row }">{{ row.modelName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="机身号 / 设备ID" min-width="160">
+            <template #default="{ row }">{{ airframeLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column label="申请时间" min-width="170">
+            <template #default="{ row }">{{ when(row.appliedAt) }}</template>
+          </el-table-column>
+          <el-table-column label="借出时间" min-width="170">
+            <template #default="{ row }">{{ when(row.borrowedAt) }}</template>
+          </el-table-column>
+          <el-table-column label="归还时间" min-width="170">
+            <template #default="{ row }">{{ when(row.returnedAt) }}</template>
+          </el-table-column>
+          <el-table-column label="驳回原因" min-width="160">
+            <template #default="{ row }">
+              <span v-if="row.rejectReason" class="text-[var(--el-color-danger)]">{{ row.rejectReason }}</span>
+              <span v-else class="text-[var(--text-faint)]">—</span>
             </template>
           </el-table-column>
+          <el-table-column label="关联订单" min-width="140">
+            <template #default="{ row }">
+              <el-button
+                v-if="row.orderId"
+                link
+                type="primary"
+                @click="openOrder(row.orderId)"
+              >
+                {{ row.orderId }}
+              </el-button>
+              <span v-else class="text-[var(--text-faint)]">未关联</span>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="该飞手暂无借用记录" :image-size="80" />
+          </template>
         </el-table>
-
-        <el-empty v-else class="mt-3" :image-size="80" description="该飞手暂未绑定无人机" />
       </section>
 
       <RelatedOrdersTable

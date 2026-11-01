@@ -122,7 +122,7 @@ const onlineLabel = (row: PilotRow) => `${row.onlineUavCount ?? 0} / ${row.uavCo
 </script>
 
 <template>
-  <MainLayout title="飞手" subtitle="注册飞手列表与详情（含绑定无人机、履约记录）。">
+  <MainLayout title="飞手" subtitle="注册飞手列表与详情（含借用记录、履约记录）。">
     <section class="panel-card p-5">
       <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div class="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
