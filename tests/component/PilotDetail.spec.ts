@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus, { ElMessageBox } from 'element-plus'
+import ElementPlus from 'element-plus'
 import PilotDetailView from '../../src/views/PilotDetailView.vue'
 import router from '../../src/router'
 import { clearStoredSession, setStoredSession } from '../../src/api/session'
 import type { AuthSession } from '../../src/types/auth'
-import type { AdminPilotDetailVo } from '../../src/types/admin'
+import type { AdminBorrowApplicationVo, AdminPilotDetailVo } from '../../src/types/admin'
 
-const { getAdminPilotDetail, updateUavAvailable } = vi.hoisted(() => ({
+const { getAdminPilotDetail, getAdminBorrowApplications } = vi.hoisted(() => ({
   getAdminPilotDetail: vi.fn(),
-  updateUavAvailable: vi.fn(),
+  getAdminBorrowApplications: vi.fn(),
 }))
 
 vi.mock('../../src/api/modules/admin-query', async () => {
@@ -20,9 +20,20 @@ vi.mock('../../src/api/modules/admin-query', async () => {
   return { ...actual, getAdminPilotDetail }
 })
 
-vi.mock('../../src/api/modules/admin', async () => {
-  const actual = (await vi.importActual('../../src/api/modules/admin')) as Record<string, unknown>
-  return { ...actual, updateUavAvailable }
+vi.mock('../../src/api/modules/admin-borrow', async () => {
+  const actual = (await vi.importActual('../../src/api/modules/admin-borrow')) as Record<
+    string,
+    unknown
+  >
+  return { ...actual, getAdminBorrowApplications }
+})
+
+const pageOf = <T,>(content: T[], totalElements = content.length) => ({
+  content,
+  page: 0,
+  size: 100,
+  totalElements,
+  totalPages: 1,
 })
 
 const detailFixture: AdminPilotDetailVo = {
@@ -35,13 +46,18 @@ const detailFixture: AdminPilotDetailVo = {
   idExpiryDate: '2025-05-01',
   idExpired: true,
   qualifications: [
-    { id: 2, aircraftModelId: 1, modelCode: 'FC30', modelName: 'DJI FlyCart 30', licenseGrade: 'BVLOS', licenseGradeLabel: '超视距' },
+    {
+      id: 2,
+      aircraftModelId: 1,
+      modelCode: 'FC30',
+      modelName: 'DJI FlyCart 30',
+      licenseGrade: 'BVLOS',
+      licenseGradeLabel: '超视距',
+    },
   ],
+  // 后端详情仍可能返回 drones；页面不再展示绑定自有机
   drones: [
     { djiId: 'SMOKE-01', aircraftModelId: 1, modelName: 'M350 RTK', online: true, available: true },
-    { djiId: 'SMOKE-02', aircraftModelId: 2, modelName: 'M30', online: false, available: false },
-    // 设备档案未注册：available = null
-    { djiId: 'SMOKE-03', aircraftModelId: null, modelName: null, online: false, available: null },
   ],
   orders: [
     {
@@ -56,6 +72,44 @@ const detailFixture: AdminPilotDetailVo = {
       createTime: '2026-09-26 09:00:00',
     },
   ],
+}
+
+const borrowForPilot: AdminBorrowApplicationVo = {
+  borrowId: 'b-11',
+  status: 'APPROVED',
+  pilotId: 11,
+  pilotName: '李四',
+  aircraftModelId: 1,
+  modelName: 'DJI FlyCart 30',
+  droneId: 'd-11',
+  serialNumber: 'SN-11',
+  orderId: 'ord-borrow-1',
+  appliedAt: '2026-10-20T08:00:00Z',
+  borrowedAt: '2026-10-20T10:00:00Z',
+  returnedAt: null,
+  rejectReason: null,
+}
+
+const borrowOtherPilot: AdminBorrowApplicationVo = {
+  borrowId: 'b-99',
+  status: 'PENDING',
+  pilotId: 99,
+  pilotName: '别人',
+  aircraftModelId: 2,
+  modelName: 'M30',
+  appliedAt: '2026-10-21T08:00:00Z',
+}
+
+const rejectedBorrow: AdminBorrowApplicationVo = {
+  borrowId: 'b-12',
+  status: 'REJECTED',
+  pilotId: 11,
+  pilotName: '李四',
+  aircraftModelId: 1,
+  modelName: 'DJI FlyCart 30',
+  appliedAt: '2026-10-18T08:00:00Z',
+  rejectReason: '机型库存不足',
+  orderId: null,
 }
 
 const adminSession: AuthSession = {
@@ -73,24 +127,17 @@ const mountDetail = async (id = '11') => {
   return wrapper
 }
 
-describe('飞手详情：绑定无人机与合规开关（TASK-FRONTEND-004）', () => {
-  it('取消设备变更确认不提交接口', async () => {
-    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
-    const wrapper = await mountDetail()
-    await wrapper.findAll('.el-switch')[0].trigger('click')
-    await flushPromises()
-    expect(updateUavAvailable).not.toHaveBeenCalled()
-    expect(wrapper.findAll('.el-switch')[0].classes()).toContain('is-checked')
-  })
+describe('飞手详情：借用记录（REQ-SUP-GOV-004）', () => {
   beforeEach(async () => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
-    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
     clearStoredSession()
     setStoredSession(adminSession)
     await router.push('/orders')
     getAdminPilotDetail.mockResolvedValue(detailFixture)
-    updateUavAvailable.mockResolvedValue({ success: true, message: '操作成功' })
+    getAdminBorrowApplications.mockResolvedValue(
+      pageOf([borrowForPilot, borrowOtherPilot, rejectedBorrow]),
+    )
   })
 
   afterEach(() => {
@@ -100,22 +147,23 @@ describe('飞手详情：绑定无人机与合规开关（TASK-FRONTEND-004）',
     clearStoredSession()
   })
 
-  it('渲染基本信息、绑定无人机表与累计完成单', async () => {
+  it('渲染基本信息、资质与累计完成单，不展示绑定无人机', async () => {
     const wrapper = await mountDetail()
 
     expect(getAdminPilotDetail).toHaveBeenCalledWith('11')
+    expect(getAdminBorrowApplications).toHaveBeenCalled()
 
     const text = wrapper.text()
     expect(text).toContain('李四')
     expect(text).toContain('ID 11')
     expect(text).toContain('飞手')
     expect(text).toContain('累计完成单')
-    expect(text).toContain('SMOKE-01')
-    expect(text).toContain('M350 RTK')
-    expect(text).toContain('在线')
-    expect(text).toContain('未映射')
-    expect(text).toContain('3 架（在线 1 架）')
     expect(text).toContain('累计完成 12 单')
+    expect(text).toContain('借用记录')
+    expect(text).not.toContain('绑定无人机')
+    expect(wrapper.findAll('.el-switch')).toHaveLength(0)
+    // drones 虽仍可能出现在 VO，但绑定表已移除
+    expect(text).not.toContain('SMOKE-01')
   })
 
   it('展示脱敏身份证号、证件过期标记与驾驶资质', async () => {
@@ -129,57 +177,41 @@ describe('飞手详情：绑定无人机与合规开关（TASK-FRONTEND-004）',
   })
 
   it('未登记实名与资质时给出空状态，不显示过期', async () => {
-    getAdminPilotDetail.mockResolvedValue({ ...detailFixture, idNumberMasked: null, idExpiryDate: null, idExpired: false, qualifications: [] })
+    getAdminPilotDetail.mockResolvedValue({
+      ...detailFixture,
+      idNumberMasked: null,
+      idExpiryDate: null,
+      idExpired: false,
+      qualifications: [],
+    })
     const wrapper = await mountDetail()
     expect(wrapper.get('[data-testid="pilot-id-number"]').text()).toBe('未登记')
     expect(wrapper.find('[data-testid="pilot-id-expired"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="pilot-qualifications"]').text()).toContain('该飞手尚未登记驾驶资质')
-  })
-
-  it('available=null 的设备：开关禁用并提示未注册，点击不发请求', async () => {
-    const wrapper = await mountDetail()
-
-    expect(wrapper.text()).toContain('开关已禁用')
-
-    const switches = wrapper.findAll('.el-switch')
-    expect(switches).toHaveLength(3)
-    expect(switches[2].classes()).toContain('is-disabled')
-
-    const unregisteredRow = wrapper
-      .findAll('.el-table__row')
-      .find((row) => row.text().includes('SMOKE-03'))!
-    expect(unregisteredRow.text()).toContain('未注册')
-
-    await switches[2].trigger('click')
-    await flushPromises()
-
-    expect(updateUavAvailable).not.toHaveBeenCalled()
-  })
-
-  it('启用开关切换调用启停接口并刷新详情', async () => {
-    const wrapper = await mountDetail()
-
-    const [enabled] = wrapper.findAll('.el-switch')
-    expect(enabled.classes()).not.toContain('is-disabled')
-    await enabled.trigger('click')
-
-    await vi.waitFor(() =>
-      expect(updateUavAvailable).toHaveBeenCalledWith('SMOKE-01', '0'),
+    expect(wrapper.get('[data-testid="pilot-qualifications"]').text()).toContain(
+      '该飞手尚未登记驾驶资质',
     )
-    await vi.waitFor(() => expect(getAdminPilotDetail).toHaveBeenCalledTimes(2))
   })
 
-  it('启停失败不改变开关状态并给出提示', async () => {
-    updateUavAvailable.mockRejectedValue(new Error('无人机不存在'))
+  it('按 pilotId 过滤并渲染借用记录表', async () => {
     const wrapper = await mountDetail()
+    const section = wrapper.get('[data-testid="pilot-borrow-records"]')
+    expect(section.text()).toContain('共 2 条')
+    expect(section.text()).toContain('已借出')
+    expect(section.text()).toContain('已驳回')
+    expect(section.text()).toContain('SN-11')
+    expect(section.text()).toContain('DJI FlyCart 30')
+    expect(section.text()).toContain('机型库存不足')
+    expect(section.text()).toContain('ord-borrow-1')
+    expect(section.text()).not.toContain('别人')
+    expect(section.text()).not.toContain('b-99')
+  })
 
-    await wrapper.findAll('.el-switch')[1].trigger('click')
-    await flushPromises()
-
-    expect(updateUavAvailable).toHaveBeenCalledWith('SMOKE-02', '1')
-    // 失败不触发重载，开关仍按原数据渲染（SMOKE-02 保持禁用态）
-    expect(getAdminPilotDetail).toHaveBeenCalledTimes(1)
-    expect(wrapper.findAll('.el-switch')[1].classes()).not.toContain('is-disabled')
+  it('无借用记录时展示空状态', async () => {
+    getAdminBorrowApplications.mockResolvedValue(pageOf([borrowOtherPilot]))
+    const wrapper = await mountDetail()
+    const section = wrapper.get('[data-testid="pilot-borrow-records"]')
+    expect(section.text()).toContain('该飞手暂无借用记录')
+    expect(section.text()).toContain('共 0 条')
   })
 
   it('关联订单行点击进入订单详情页', async () => {

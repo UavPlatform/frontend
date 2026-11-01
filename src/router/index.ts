@@ -56,7 +56,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
-    // 飞手详情（TASK-FRONTEND-004）：绑定无人机 + 启停开关 + 关联订单（ADR-0004：无人机不设一级菜单）
+    // 飞手详情（REQ-SUP-GOV-004）：实名资质 + 借用记录 + 关联订单
     path: '/pilots/:id',
     name: 'pilot-detail',
     component: () => import('../views/PilotDetailView.vue'),
