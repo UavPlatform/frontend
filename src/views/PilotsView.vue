@@ -118,7 +118,6 @@ watch(
   { immediate: true },
 )
 
-const onlineLabel = (row: PilotRow) => `${row.onlineUavCount ?? 0} / ${row.uavCount ?? 0}`
 </script>
 
 <template>
@@ -173,11 +172,6 @@ const onlineLabel = (row: PilotRow) => `${row.onlineUavCount ?? 0} / ${row.uavCo
           <el-table-column label="完成单" width="100">
             <template #default="scope">
               {{ scope.row.completedCount ?? 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="无人机（在线/绑定）" width="170">
-            <template #default="scope">
-              {{ onlineLabel(scope.row) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="120" fixed="right">

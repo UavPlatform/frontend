@@ -29,16 +29,12 @@ const pilotA: AdminPilotVo = {
   userId: 11,
   userName: '李四',
   status: 1,
-  uavCount: 3,
-  onlineUavCount: 2,
   completedCount: 12,
 }
 const pilotB: AdminPilotVo = {
   userId: 12,
   userName: '赵六',
   status: 0,
-  uavCount: 1,
-  onlineUavCount: 0,
   completedCount: 0,
 }
 
@@ -76,7 +72,7 @@ describe('飞手列表（TASK-FRONTEND-004）', () => {
     clearStoredSession()
   })
 
-  it('默认按 page=0/size=10 请求并渲染完成单、无人机数与在线数', async () => {
+  it('默认按 page=0/size=10 请求并渲染完成单，不展示已删除的绑机统计', async () => {
     const wrapper = await mountList()
 
     expect(getAdminPilots).toHaveBeenCalledWith({
@@ -88,7 +84,8 @@ describe('飞手列表（TASK-FRONTEND-004）', () => {
     const text = rowsText(wrapper).join('\n')
     expect(text).toContain('李四')
     expect(text).toContain('12')
-    expect(text).toContain('2 / 3')
+    expect(wrapper.text()).not.toContain('无人机（在线/绑定）')
+    expect(text).not.toContain('2 / 3')
     expect(text).toContain('赵六')
   })
 

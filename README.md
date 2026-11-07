@@ -12,7 +12,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-开发服务默认把 `/api` 和 `/ws` 代理至 `localhost:8081`。可通过 `VITE_API_BASE_URL` 设置 HTTP 接口前缀。生产部署需要配置 API 反向代理及 SPA history fallback，深链接必须回退到 `index.html`。不得把管理员密码、视频签名或后端密钥写入前端环境变量。
+开发服务把 `/api` 和 `/ws` 代理至 `vite.config.ts` 中配置的调试后端（当前为 `http://120.77.170.101:8888`，即服务器上的 Caddy，由它转发到后端 `:8081`）。`/ws` 的 `target` 只写 origin、不带路径前缀：浏览器请求本身已是 `/ws/web`，target 若带 `/ws` 会被拼成 `/ws/ws/web`。可通过 `VITE_API_BASE_URL` 设置 HTTP 接口前缀。生产部署需要配置 API 反向代理及 SPA history fallback，深链接必须回退到 `index.html`。不得把管理员密码、视频签名或后端密钥写入前端环境变量。
 
 ## 检查与测试
 
