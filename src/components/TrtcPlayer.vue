@@ -103,7 +103,6 @@ const startRemoteVideo = async (userId: string) => {
     videoElement.id = `remote-video-${userId}`
     videoElement.style.width = '100%'
     videoElement.style.height = '100%'
-    videoElement.style.objectFit = 'contain'
     videoContainer.value.innerHTML = ''
     videoContainer.value.appendChild(videoElement)
 
@@ -111,6 +110,7 @@ const startRemoteVideo = async (userId: string) => {
       userId,
       streamType: TRTC.TYPE.STREAM_TYPE_MAIN,
       view: videoElement,
+      option: { fillMode: 'contain' },
     })
 
     console.log('Started remote video for user:', userId)
@@ -210,11 +210,8 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.trtc-video-container :deep(video) {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: contain !important;
-}
+/* 画面方向由推流端编码决定，播放端只负责填充：不要在这里加旋转。
+   SDK 会给 video 元素写入 width/height/object-fit 内联样式，勿用 !important 覆盖。 */
 
 .trtc-status {
   position: absolute;
