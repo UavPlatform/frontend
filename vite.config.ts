@@ -17,7 +17,9 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/ws': {
-        target: 'ws://120.77.170.101:8888/ws',
+        // target 不要带 /ws：浏览器请求已是 /ws/web，否则会拼成 /ws/ws/web
+        target: 'http://120.77.170.101:8888',
+        changeOrigin: true,
         ws: true,
       },
     },
