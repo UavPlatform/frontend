@@ -47,17 +47,6 @@ export interface UavListResult {
 
 export type UavListMode = 'online' | 'all'
 
-/** 前端视图模型：POST /live/req 的 LiveStartVO + 本地提示文案 */
-export interface LiveStartResponse {
-  success: boolean
-  message: string
-  code?: string
-  roomId?: string
-  requestId?: string
-  ackConfirmed?: boolean
-  liveState?: LiveState
-}
-
 /** 前端视图模型：POST /live/get 的 PullCredentialsVO（liveState 已收敛为字面量） */
 export interface LiveCredentials {
   success: boolean
