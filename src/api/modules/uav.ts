@@ -1,7 +1,6 @@
 import { apiGet } from '../contract'
 import { BizError } from './order'
-import { toLiveState } from '../../types/uav'
-import type { BackendUavItem, UavDeviceStatus, UavItem, UavListResult } from '../../types/uav'
+import type { BackendUavItem, UavItem, UavListResult } from '../../types/uav'
 import type { OrderGpsPoint } from '../../types/admin'
 
 const mapBackendUav = (item: BackendUavItem, isOnline: boolean): UavItem => {
@@ -23,7 +22,7 @@ const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
   }
 
   // 列表数据在 Result.data 数组中；onlineOnly=true 时由后端过滤出在线设备。
-  // 全量列表不含在线状态字段，调用方需结合在线列表（或 /webUav/status）判定 isOnline。
+  // 全量列表不含在线状态字段，调用方需结合在线列表判定 isOnline。
   const items = body.data ?? []
   return {
     success: true,
@@ -34,19 +33,6 @@ const fetchUavList = async (onlyOnline: boolean): Promise<UavListResult> => {
 export const listOnlineUavs = async (): Promise<UavListResult> => fetchUavList(true)
 
 export const listAllUavs = async (): Promise<UavListResult> => fetchUavList(false)
-
-/** 单设备实时状态（GET /webUav/status）：补齐列表 VO 缺失的在线/直播状态 */
-export const getUavStatus = async (deviceId: string): Promise<UavDeviceStatus> => {
-  const body = await apiGet('/webUav/status', { params: { deviceId } })
-  if (!body.success || !body.data) {
-    throw new BizError(body.errorCode || 'UAV_STATUS_FAILED', body.message || '获取无人机状态失败')
-  }
-
-  return {
-    ...body.data,
-    liveState: toLiveState(body.data.liveState),
-  }
-}
 
 /**
  * 订单飞行轨迹（GET /webUav/trajectory）：按订单号升序返回 GPS 点位。

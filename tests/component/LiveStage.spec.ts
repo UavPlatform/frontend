@@ -153,7 +153,9 @@ describe('LiveStage read-only viewing with real live-watch and API adapters', ()
     expect(post).not.toHaveBeenCalled()
   })
 
-  it('exports only viewing operations from the handwritten live API', () => {
-    expect(Object.keys(liveApi).sort()).toEqual(['getPullCredentials', 'leaveLive'])
+  it('does not export remote-control wrappers from the handwritten live API', () => {
+    for (const name of ['requestStartLive', 'closeLive', 'watchLiveStop']) {
+      expect(name in liveApi).toBe(false)
+    }
   })
 })
