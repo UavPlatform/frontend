@@ -45,7 +45,7 @@ const back = () => {
 
       <template v-if="order">
         <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,65fr)_minmax(0,35fr)]">
-          <LiveStage :live-detail="null" :device-id="deviceId" />
+          <LiveStage :order-id="flightOrderId" :device-id="deviceId" />
           <div class="flex flex-col gap-4">
             <section class="panel-card context-panel p-4">
               <div class="panel-title">作业上下文</div>

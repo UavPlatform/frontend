@@ -42,13 +42,15 @@ export interface UavListResult {
 
 export type UavListMode = 'online' | 'all'
 
-/** 前端视图模型：POST /live/get 的 PullCredentialsVO（liveState 已收敛为字面量） */
+/** TRTC 播放器使用的观看凭证：设备级来自 POST /live/get，订单级来自 …/watch */
 export interface LiveCredentials {
   success: boolean
   roomId: string
   userId: string
   userSig: string
   sdkAppId: number
+  privateMapKey?: string
+  publisherUserId?: string
   wsUrl?: string
   ackConfirmed?: boolean
   liveState?: LiveState

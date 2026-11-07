@@ -1,4 +1,4 @@
-import { apiPost, expectData, expectSuccess } from '../contract'
+import { apiGet, apiPost, expectData, expectSuccess } from '../contract'
 import { toLiveState } from '../../types/uav'
 import type { LiveCredentials } from '../../types/uav'
 
@@ -21,6 +21,42 @@ export const getPullCredentials = async (
     wsUrl: data.wsUrl,
     ackConfirmed: data.ackConfirmed ?? false,
     liveState: toLiveState(data.liveState),
+  }
+}
+
+/**
+ * GET /dispatch/orders/{orderId}/live：订单级直播态。
+ * 与设备级 `/live/get` 的区别：订单直播按「飞行连接」发凭证，
+ * 房间由后端按 liveId 派生，观众只能拿接收权限票据（ADR-0004 只读旁听）。
+ */
+export const getOrderLive = async (orderId: string) =>
+  expectData(
+    await apiGet('/dispatch/orders/{orderId}/live', { path: { orderId } }),
+    '读取订单直播状态失败',
+  )
+
+/**
+ * POST /dispatch/orders/{orderId}/live/{liveId}/watch：订单直播观看凭证。
+ * 后端按观众身份现签 UserSig + privateMapKey（接收权限），并带 publisherUserId
+ * 供播放端过滤——房间里可能同时有多个上行用户，只订阅本单主播。
+ */
+export const watchOrderLive = async (
+  orderId: string,
+  liveId: string,
+): Promise<LiveCredentials> => {
+  const ticket = expectData(
+    await apiPost('/dispatch/orders/{orderId}/live/{liveId}/watch', { path: { orderId, liveId } }),
+    '获取订单直播凭证失败',
+  )
+
+  return {
+    success: true,
+    roomId: ticket.roomId ?? '',
+    userId: ticket.userId ?? '',
+    userSig: ticket.userSig ?? '',
+    sdkAppId: ticket.sdkAppId ?? 0,
+    privateMapKey: ticket.privateMapKey,
+    publisherUserId: ticket.publisherUserId,
   }
 }
 
