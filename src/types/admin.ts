@@ -53,10 +53,7 @@ export type AdminUserDetailVo = Schemas['AdminUserDetailVo']
 /** 契约 AdminPilotVo：GET /admin/pilots 列表项（注册飞手 role=1） */
 export type AdminPilotVo = Schemas['AdminPilotVo']
 
-/** 契约 AdminPilotDroneVo：飞手详情绑定无人机表项（djiId + 机型 + 在线 + 可用） */
-export type AdminPilotDroneVo = Schemas['AdminPilotDroneVo']
-
-/** 契约 AdminPilotDetailVo：GET /admin/pilots/{userId}（绑定无人机 + 关联订单） */
+/** 契约 AdminPilotDetailVo：GET /admin/pilots/{userId}（飞手资料 + 关联订单；借用记录通过借机接口查询） */
 export type AdminPilotDetailVo = Schemas['AdminPilotDetailVo']
 
 /** 契约 AdminDispatchOrderRow：GET /admin/dispatch/orders */
