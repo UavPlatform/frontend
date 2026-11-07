@@ -21,11 +21,6 @@ export type UavRuntimeStatus = Schemas['UavRuntimeStatusVo']
 /** 契约 UavVo：GET /webUav/getUav 的列表项 */
 export type BackendUavItem = Schemas['UavVo']
 
-/** 契约 WebUavStatusVo：GET /webUav/status 的 data（liveState 已收敛为字面量） */
-export type UavDeviceStatus = Omit<Schemas['WebUavStatusVo'], 'liveState'> & {
-  liveState?: LiveState
-}
-
 /** 前端视图模型：在契约 UavVo 之上补齐在线/直播态（这两个字段由前端结合多路数据判定） */
 export interface UavItem {
   id: number
@@ -46,17 +41,6 @@ export interface UavListResult {
 }
 
 export type UavListMode = 'online' | 'all'
-
-/** 前端视图模型：POST /live/req 的 LiveStartVO + 本地提示文案 */
-export interface LiveStartResponse {
-  success: boolean
-  message: string
-  code?: string
-  roomId?: string
-  requestId?: string
-  ackConfirmed?: boolean
-  liveState?: LiveState
-}
 
 /** 前端视图模型：POST /live/get 的 PullCredentialsVO（liveState 已收敛为字面量） */
 export interface LiveCredentials {

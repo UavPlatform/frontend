@@ -36,13 +36,10 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['post', '/admin/complaint/{id}/approve'],
   ['post', '/admin/complaint/{id}/reject'],
   ['get', '/webUav/getUav'],
-  ['get', '/webUav/status'],
   ['get', '/webUav/position'],
   ['get', '/webUav/trajectory'],
   ['get', '/rider/recommended'],
-  ['post', '/live/req'],
   ['post', '/live/get'],
-  ['post', '/live/close'],
   ['post', '/live/leave'],
   ['get', '/task/detail'],
   ['get', '/task/{taskNum}/applications'],
@@ -123,6 +120,12 @@ const spec = JSON.parse(readFileSync(specPath, 'utf8')) as {
 }
 
 describe('OpenAPI 契约（消费侧门禁）', () => {
+  it('Web 不再消费远控开停播接口（后端合同仍声明，待新合同同步生成物）', () => {
+    // 不手改 vendor OpenAPI 或生成类型；仅约束当前手写消费层。
+    const remoteControlPaths = new Set(['/live/req', '/live/close'])
+    expect(collectCallSites().filter(([, path]) => remoteControlPaths.has(path))).toEqual([])
+  })
+
   it('契约采用 LF 换行，与跨平台 checkout 及同步脚本一致', () => {
     expect(readFileSync(specPath, 'utf8')).not.toContain('\r')
   })

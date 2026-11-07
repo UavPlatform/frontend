@@ -55,10 +55,6 @@ const detailFixture: AdminPilotDetailVo = {
       licenseGradeLabel: '超视距',
     },
   ],
-  // 后端详情仍可能返回 drones；页面不再展示绑定自有机
-  drones: [
-    { djiId: 'SMOKE-01', aircraftModelId: 1, modelName: 'M350 RTK', online: true, available: true },
-  ],
   orders: [
     {
       orderNum: 'ORD-A',
@@ -88,16 +84,6 @@ const borrowForPilot: AdminBorrowApplicationVo = {
   borrowedAt: '2026-10-20T10:00:00Z',
   returnedAt: null,
   rejectReason: null,
-}
-
-const borrowOtherPilot: AdminBorrowApplicationVo = {
-  borrowId: 'b-99',
-  status: 'PENDING',
-  pilotId: 99,
-  pilotName: '别人',
-  aircraftModelId: 2,
-  modelName: 'M30',
-  appliedAt: '2026-10-21T08:00:00Z',
 }
 
 const rejectedBorrow: AdminBorrowApplicationVo = {
@@ -135,9 +121,7 @@ describe('飞手详情：借用记录（REQ-SUP-GOV-004）', () => {
     setStoredSession(adminSession)
     await router.push('/orders')
     getAdminPilotDetail.mockResolvedValue(detailFixture)
-    getAdminBorrowApplications.mockResolvedValue(
-      pageOf([borrowForPilot, borrowOtherPilot, rejectedBorrow]),
-    )
+    getAdminBorrowApplications.mockResolvedValue(pageOf([borrowForPilot, rejectedBorrow]))
   })
 
   afterEach(() => {
@@ -162,8 +146,6 @@ describe('飞手详情：借用记录（REQ-SUP-GOV-004）', () => {
     expect(text).toContain('借用记录')
     expect(text).not.toContain('绑定无人机')
     expect(wrapper.findAll('.el-switch')).toHaveLength(0)
-    // drones 虽仍可能出现在 VO，但绑定表已移除
-    expect(text).not.toContain('SMOKE-01')
   })
 
   it('展示脱敏身份证号、证件过期标记与驾驶资质', async () => {
@@ -192,8 +174,9 @@ describe('飞手详情：借用记录（REQ-SUP-GOV-004）', () => {
     )
   })
 
-  it('按 pilotId 过滤并渲染借用记录表', async () => {
+  it('按契约 pilotId 过滤参数拉取并渲染借用记录表', async () => {
     const wrapper = await mountDetail()
+    expect(getAdminBorrowApplications).toHaveBeenCalledWith({ pilotId: 11, page: 0, size: 100 })
     const section = wrapper.get('[data-testid="pilot-borrow-records"]')
     expect(section.text()).toContain('共 2 条')
     expect(section.text()).toContain('已借出')
@@ -202,12 +185,10 @@ describe('飞手详情：借用记录（REQ-SUP-GOV-004）', () => {
     expect(section.text()).toContain('DJI FlyCart 30')
     expect(section.text()).toContain('机型库存不足')
     expect(section.text()).toContain('ord-borrow-1')
-    expect(section.text()).not.toContain('别人')
-    expect(section.text()).not.toContain('b-99')
   })
 
   it('无借用记录时展示空状态', async () => {
-    getAdminBorrowApplications.mockResolvedValue(pageOf([borrowOtherPilot]))
+    getAdminBorrowApplications.mockResolvedValue(pageOf([]))
     const wrapper = await mountDetail()
     const section = wrapper.get('[data-testid="pilot-borrow-records"]')
     expect(section.text()).toContain('该飞手暂无借用记录')

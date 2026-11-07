@@ -7,7 +7,7 @@ import type { LiveCredentials } from '../../types/uav'
 
 /**
  * 图传只读接入（ADR-0004：监管是旁听）。
- * 只调用 `/live/get` 拉流凭据，**不调用** requestStartLive / closeLive —— 页面上没有任何
+ * 只调用 `/live/get` 拉流凭据，不下发设备开播/停播命令 —— 页面上没有任何
  * 开播/停播控件；设备离线或未开播时降级为提示，不会代监管员发起图传。
  * 离开（切换设备 / 卸载）对**旧**设备调 `/live/leave` 收口本人观看记录：`/live/get` 会开记录，
  * 不收口就会留下永不结束的观看会话；leave 不动推流，区别于 close。

@@ -77,13 +77,13 @@ const reload = async () => {
       if (seq === loadSeq) loading.value = false
     })
 
-  // 契约 GET /admin/borrow-applications 无 pilotId 过滤，拉全量后前端按飞手过滤
+  // 契约 GET /admin/borrow-applications 支持 pilotId 过滤，服务端只回该飞手的借用记录
   const borrowsPromise = fetchAllPages((page, size) =>
-    getAdminBorrowApplications({ page, size }),
+    getAdminBorrowApplications({ pilotId, page, size }),
   )
     .then((result) => {
       if (seq !== loadSeq) return
-      borrows.value = result.items.filter((row) => row.pilotId === pilotId)
+      borrows.value = result.items
       borrowsTruncated.value = result.truncated
     })
     .catch((err) => {
