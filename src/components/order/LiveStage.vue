@@ -1,18 +1,28 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 const TrtcPlayer = defineAsyncComponent(() => import('../TrtcPlayer.vue').then((module) => module.default))
+import { getOrderLive, watchOrderLive } from '../../api/modules/live'
 import { createLiveWatch } from '../../api/modules/live-watch'
 import type { TaskProgressive } from '../../api/modules/order-supervision'
 import type { LiveCredentials } from '../../types/uav'
 
 /**
  * 图传只读接入（ADR-0004：监管是旁听）。
- * 只调用 `/live/get` 拉流凭据，不下发设备开播/停播命令 —— 页面上没有任何
- * 开播/停播控件；设备离线或未开播时降级为提示，不会代监管员发起图传。
- * 离开（切换设备 / 卸载）对**旧**设备调 `/live/leave` 收口本人观看记录：`/live/get` 会开记录，
+ *
+ * 两种来源：
+ * - 订单级（传 `orderId`）：`GET /dispatch/orders/{id}/live` 轮询直播态 → `…/{liveId}/watch`
+ *   取观看票据。房间与 liveId 由后端按飞行连接派生，观众只有接收权限；
+ *   播放端按 `publisherUserId` 只订阅本单主播。
+ * - 设备级（只传 `deviceId`）：`/live/get` 拉流凭据 + `/live/leave` 收口本人观看记录。
+ *
+ * 两者都不下发开播/停播命令 —— 页面上没有任何开播/停播控件；
+ * 设备离线或未开播时降级为提示，不会代监管员发起图传。
+ * 设备级离开（切换设备 / 卸载）对**旧**设备调 `/live/leave`：`/live/get` 会开记录，
  * 不收口就会留下永不结束的观看会话；leave 不动推流，区别于 close。
+ * 订单级票据本身带租约，无需显式离开。
  */
 const props = defineProps<{
+  orderId?: string
   /** `/task/detail` 回显（平台直播态展示用）；null = 不可用（无权或未回显） */
   liveDetail?: TaskProgressive | null
   /**
@@ -27,20 +37,65 @@ const emit = defineEmits<{ (e: 'live-state', value: string | undefined): void }>
 const stage = ref<'resolving' | 'ready' | 'waiting'>('resolving')
 const note = ref('')
 const credentials = ref<LiveCredentials | null>(null)
+const orderLiveState = ref<string>()
 
 /** 平台直播态：拉流凭证是后端 `LiveSessionSnapshot` 的实时值，优先于 `/task/detail` 回显（管理员该接口 403） */
-const liveState = computed(() => credentials.value?.liveState ?? props.liveDetail?.liveState)
+const liveState = computed(() => props.orderId
+  ? orderLiveState.value
+  : credentials.value?.liveState ?? props.liveDetail?.liveState)
 
 const onPlayerError = (message: string) => {
   note.value = message
 }
 
 watch(
-  () => props.deviceId,
-  async (deviceId, _previous, onCleanup) => {
+  [() => props.orderId, () => props.orderId ? undefined : props.deviceId],
+  async ([orderId, deviceId], _previous, onCleanup) => {
     let active = true
-    onCleanup(() => { active = false })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    onCleanup(() => {
+      active = false
+      clearTimeout(timer)
+    })
     credentials.value = null
+    orderLiveState.value = undefined
+    if (orderId) {
+      stage.value = 'resolving'
+      let watchingLiveId: string | undefined
+      const poll = async () => {
+        try {
+          const status = await getOrderLive(orderId)
+          if (!active) return
+          orderLiveState.value = status.state
+          if (!status.configured || status.state !== 'RUNNING' || !status.liveId) {
+            credentials.value = null
+            watchingLiveId = undefined
+            stage.value = 'waiting'
+            note.value = !status.configured ? '订单直播服务尚未配置'
+              : status.state === 'STARTING' ? '飞手正在开播，等待图传首帧'
+                : '本单暂无可观看直播'
+          } else if (watchingLiveId !== status.liveId) {
+            credentials.value = null
+            stage.value = 'resolving'
+            const ticket = await watchOrderLive(orderId, status.liveId)
+            if (!active) return
+            credentials.value = ticket
+            watchingLiveId = status.liveId
+            stage.value = 'ready'
+          }
+        } catch {
+          if (!active) return
+          credentials.value = null
+          watchingLiveId = undefined
+          stage.value = 'waiting'
+          note.value = '暂时无法观看本单直播，正在重试'
+        } finally {
+          if (active) timer = setTimeout(() => void poll(), 5000)
+        }
+      }
+      await poll()
+      return
+    }
     if (deviceId === undefined) {
       stage.value = 'resolving'
       note.value = ''
@@ -84,7 +139,9 @@ watch(
 <template>
   <div class="live-stage">
     <div class="live-frame">
-      <div v-if="stage === 'resolving'" class="live-placeholder">正在解析作业设备…</div>
+      <div v-if="stage === 'resolving'" class="live-placeholder">
+        {{ orderId ? '正在读取本单直播…' : '正在解析作业设备…' }}
+      </div>
       <div v-else-if="stage === 'waiting'" class="live-placeholder waiting">{{ note }}</div>
       <div v-else class="operation-video-shell">
         <TrtcPlayer :credentials="credentials" @error="onPlayerError" />
