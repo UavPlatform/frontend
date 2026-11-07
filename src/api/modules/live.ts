@@ -1,4 +1,4 @@
-import { apiPost, expectData, expectSuccess } from '../contract'
+import { apiGet, apiPost, expectData, expectSuccess } from '../contract'
 import { BizError } from './order'
 import { getUavStatus } from './uav'
 import { toLiveState } from '../../types/uav'
@@ -40,6 +40,21 @@ export const getPullCredentials = async (
     ackConfirmed: data.ackConfirmed ?? false,
     liveState: toLiveState(data.liveState),
   }
+}
+
+export const getOrderLive = async (orderId: string) =>
+  expectData(await apiGet('/dispatch/orders/{orderId}/live', { path: { orderId } }), '读取订单直播状态失败')
+
+export const watchOrderLive = async (orderId: string, liveId: string): Promise<LiveCredentials> => {
+  const ticket = expectData(
+    await apiPost('/dispatch/orders/{orderId}/live/{liveId}/watch', { path: { orderId, liveId } }),
+    '获取订单直播凭证失败',
+  )
+  const { roomId, userId, userSig, sdkAppId, privateMapKey, publisherUserId } = ticket
+  if (!roomId || !userId || !userSig || !sdkAppId || !privateMapKey || !publisherUserId) {
+    throw new Error('订单直播凭证不完整')
+  }
+  return { success: true, roomId, userId, userSig, sdkAppId, privateMapKey, publisherUserId }
 }
 
 export interface LiveStopOutcome {

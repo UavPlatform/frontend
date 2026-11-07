@@ -28,7 +28,7 @@ const initTRTC = async (attempt: number) => {
     return
   }
 
-  const { sdkAppId, userId, userSig, roomId } = props.credentials
+  const { sdkAppId, userId, userSig, roomId, privateMapKey, publisherUserId } = props.credentials
 
   if (!sdkAppId || !userId || !userSig || !roomId) {
     errorMessage.value = '缺少必要的直播参数'
@@ -52,6 +52,7 @@ const initTRTC = async (attempt: number) => {
 
     client.on(TRTC.EVENT.REMOTE_VIDEO_AVAILABLE, (event: { userId: string }) => {
       if (disposed || attempt !== generation) return
+      if (publisherUserId && event.userId !== publisherUserId) return
       remoteUserId.value = event.userId
       startRemoteVideo(event.userId)
     })
@@ -77,6 +78,12 @@ const initTRTC = async (attempt: number) => {
       userId,
       userSig,
       strRoomId: roomId,
+      ...(privateMapKey && {
+        privateMapKey,
+        scene: TRTC.TYPE.SCENE_LIVE,
+        role: TRTC.TYPE.ROLE_AUDIENCE,
+        autoReceiveAudio: false,
+      }),
     })
 
     if (disposed || attempt !== generation) return
@@ -144,7 +151,8 @@ const cleanup = async () => {
 
 watch(
   () => props.credentials ? [props.credentials.roomId, props.credentials.userId,
-    props.credentials.userSig, props.credentials.sdkAppId] : null,
+    props.credentials.userSig, props.credentials.sdkAppId,
+    props.credentials.privateMapKey, props.credentials.publisherUserId] : null,
   () => {
     const attempt = ++generation
     transition = transition.then(async () => {

@@ -55,7 +55,7 @@ const context = computed(() => [
       </div>
 
       <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)]">
-        <LiveStage :live-detail="null" :device-id="props.deviceId" />
+        <LiveStage :order-id="props.orderId" :device-id="props.deviceId" />
         <div class="flex flex-col gap-4">
           <section class="panel-card context-panel p-4">
             <div class="panel-title">作业上下文</div>

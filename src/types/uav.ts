@@ -58,13 +58,15 @@ export interface LiveStartResponse {
   liveState?: LiveState
 }
 
-/** 前端视图模型：POST /live/get 的 PullCredentialsVO（liveState 已收敛为字面量） */
+/** TRTC 播放器使用的观看凭证。 */
 export interface LiveCredentials {
   success: boolean
   roomId: string
   userId: string
   userSig: string
   sdkAppId: number
+  privateMapKey?: string
+  publisherUserId?: string
   wsUrl?: string
   ackConfirmed?: boolean
   liveState?: LiveState

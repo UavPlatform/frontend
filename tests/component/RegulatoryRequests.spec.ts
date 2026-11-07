@@ -10,13 +10,15 @@ const { getPullCredentials, fetchOrderTelemetry, fetchOrderPosition, fetchOrderS
   fetchOrderPosition: vi.fn(),
   fetchOrderStartedAt: vi.fn(),
 }))
-const { leaveLive } = vi.hoisted(() => ({ leaveLive: vi.fn() }))
+const { leaveLive, getOrderLive, watchOrderLive } = vi.hoisted(() => ({
+  leaveLive: vi.fn(), getOrderLive: vi.fn(), watchOrderLive: vi.fn(),
+}))
 vi.mock('../../src/api/modules/order-supervision', () => ({
   fetchOrderTelemetry,
   fetchOrderPosition,
   fetchOrderStartedAt,
 }))
-vi.mock('../../src/api/modules/live', () => ({ leaveLive, getPullCredentials }))
+vi.mock('../../src/api/modules/live', () => ({ leaveLive, getPullCredentials, getOrderLive, watchOrderLive }))
 vi.mock('../../src/components/TrtcPlayer.vue', () => ({ default: {
   props: ['credentials'], template: '<div data-testid="player">{{ credentials.roomId }}</div>',
 } }))
@@ -28,6 +30,31 @@ const deferred = <T,>() => {
 afterEach(async () => { await flushPromises(); vi.useRealTimers(); vi.resetAllMocks() })
 
 describe('supervision request lifecycles', () => {
+  it('joins the order room when it starts and leaves it when the order stream stops', async () => {
+    vi.useFakeTimers()
+    getOrderLive
+      .mockResolvedValueOnce({ configured: true, state: 'STARTING' })
+      .mockResolvedValueOnce({ configured: true, state: 'RUNNING', liveId: 'L1' })
+      .mockResolvedValueOnce({ configured: true, state: 'RUNNING', liveId: 'L1' })
+      .mockResolvedValueOnce({ configured: true, state: 'UNAVAILABLE' })
+    watchOrderLive.mockResolvedValue({ roomId: 'order-room' })
+    const wrapper = mount(LiveStage, {
+      props: { orderId: 'O1', deviceId: 'A' }, global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('等待图传首帧')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(watchOrderLive).toHaveBeenCalledWith('O1', 'L1')
+    expect(wrapper.get('[data-testid="player"]').text()).toBe('order-room')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(watchOrderLive).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(wrapper.find('[data-testid="player"]').exists()).toBe(false)
+    expect(getPullCredentials).not.toHaveBeenCalled()
+    wrapper.unmount()
+    expect(leaveLive).not.toHaveBeenCalled()
+  })
+
   it('does not play credentials returned by a previous device', async () => {
     const old = deferred<unknown>()
     getPullCredentials.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ roomId: 'room-B' })
