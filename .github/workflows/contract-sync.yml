@@ -36,84 +36,108 @@ jobs:
       - name: Fetch contract from backend Release
         id: fetch
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          DISPATCH_SHA256: ${{ github.event.client_payload.sha256 }}
         run: |
-          set -e
-          
-          # 优先使用 repository_dispatch payload
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            TAG="${{ github.event.client_payload.tag }}"
-            EXPECTED_SHA256="${{ github.event.client_payload.sha256 }}"
-            ASSET_URL="${{ github.event.client_payload.asset_url }}"
+          set -euo pipefail
+          mkdir -p /tmp/contract
+
+          # 资产下载统一走 GitHub API（gh release download）：匿名
+          # releases/download/... 会 302 到 release-assets CDN，实测长期 504（见 PR 说明）。
+          TAG="$DISPATCH_TAG"
+          EXPECTED_SHA256="$DISPATCH_SHA256"
+
+          if [ -n "$TAG" ]; then
             echo "来源：repository_dispatch event"
           else
             echo "来源：schedule/workflow_dispatch，查询最新 contract-* Release"
-            
-            # 使用 gh release list 查询最新 contract-* Release（更可靠）
             TAG=$(gh release list --repo UavPlatform/backend --limit 100 \
-              | awk -F'\t' '$3 ~ /^contract-/ {print $3; exit}')
-            
-            if [ -z "$TAG" ]; then
-              echo "未找到 contract-* Release，回退到 raw URL"
-              ASSET_URL="https://raw.githubusercontent.com/UavPlatform/backend/main/spec/openapi/drone-backend.openapi.json"
-              TAG="raw-fallback"
-              EXPECTED_SHA256=""
-            else
-              echo "找到最新 contract Release: $TAG"
-              
-              # 获取 Release 详细信息
-              RELEASE_JSON=$(gh api "repos/UavPlatform/backend/releases/tags/$TAG")
-              
-              # 查找 drone-backend.openapi.json 资产
-              ASSET_URL=$(echo "$RELEASE_JSON" | jq -r \
-                '.assets[] | select(.name == "drone-backend.openapi.json") | .browser_download_url')
-              
-              # 查找 .sha256 资产
-              SHA256_URL=$(echo "$RELEASE_JSON" | jq -r \
-                '.assets[] | select(.name | endswith(".sha256")) | .browser_download_url')
-              
-              if [ -n "$SHA256_URL" ]; then
-                EXPECTED_SHA256=$(curl -fsSL "$SHA256_URL" | awk '{print $1}')
-              else
-                EXPECTED_SHA256=""
-              fi
+              --json tagName --jq '[.[] | .tagName | select(startswith("contract-"))] | first // ""')
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "未找到 contract-* Release，回退到 raw URL"
+            ASSET_URL="https://raw.githubusercontent.com/UavPlatform/backend/main/spec/openapi/drone-backend.openapi.json"
+            TAG="raw-fallback"
+            curl -fsSL --retry 3 "$ASSET_URL" -o /tmp/contract/drone-backend.openapi.json
+            EXPECTED_SHA256=""
+          else
+            echo "下载 Release 资产：$TAG"
+            gh release download "$TAG" \
+              --repo UavPlatform/backend \
+              --pattern 'drone-backend.openapi.json' \
+              --pattern '*.sha256' \
+              --dir /tmp/contract \
+              --clobber
+            ASSET_URL="https://github.com/UavPlatform/backend/releases/download/$TAG/drone-backend.openapi.json"
+            if [ -z "$EXPECTED_SHA256" ]; then
+              EXPECTED_SHA256=$(awk '{print $1}' /tmp/contract/drone-backend.openapi.json.sha256)
             fi
           fi
-          
+
           echo "TAG=$TAG"
           echo "ASSET_URL=$ASSET_URL"
           echo "EXPECTED_SHA256=$EXPECTED_SHA256"
-          
-          # 下载契约文件
-          curl -fsSL "$ASSET_URL" -o /tmp/contract.json
-          
-          # 计算实际 sha256
-          ACTUAL_SHA256=$(sha256sum /tmp/contract.json | awk '{print $1}')
+
+          ACTUAL_SHA256=$(sha256sum /tmp/contract/drone-backend.openapi.json | awk '{print $1}')
           echo "ACTUAL_SHA256=$ACTUAL_SHA256"
-          
-          # 校验 sha256（如果有预期值）
+
+          # sha256 校验失败是真失败：下载到的不是被发布的那份契约，后续生成没有意义。
           if [ -n "$EXPECTED_SHA256" ] && [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
-            echo "❌ SHA256 校验失败！"
-            echo "预期：$EXPECTED_SHA256"
-            echo "实际：$ACTUAL_SHA256"
+            echo "::error::SHA256 校验失败（预期 $EXPECTED_SHA256，实际 $ACTUAL_SHA256）"
             exit 1
           fi
-          
-          # 导出环境变量供后续步骤使用
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "sha256=$ACTUAL_SHA256" >> "$GITHUB_OUTPUT"
           echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
 
       - name: Sync contract and generate types
         env:
-          OPENAPI_SOURCE: /tmp/contract.json
+          OPENAPI_SOURCE: /tmp/contract/drone-backend.openapi.json
         run: |
           pnpm run api:sync
           pnpm run api:gen
           pnpm run api:check
 
-      - name: Run type check
-        run: pnpm run typecheck
+      # 消费侧校验（typecheck）不阻断 PR：同步 PR 是「工单」，职责是把新契约带进仓库并
+      # 暴露需要适配的调用点。硬门禁在 main 的 CI（.github/workflows/ci.yml）里。
+      - name: Run type check (non-blocking)
+        id: typecheck
+        continue-on-error: true
+        run: |
+          set +e
+          pnpm run typecheck 2>&1 | tee /tmp/typecheck.log
+          STATUS=${PIPESTATUS[0]}
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::warning::typecheck 未通过（不阻断 PR），详见 PR 正文的待办清单"
+          fi
+          exit 0
+
+      - name: Collect adapter worklist
+        id: worklist
+        run: |
+          set -uo pipefail
+          {
+            echo 'worklist<<EOF'
+            if [ "${{ steps.typecheck.outputs.status }}" = "0" ]; then
+              echo '无明显待适配项（typecheck 通过）。'
+            else
+              echo '以下 `pnpm run typecheck` 报错需要在本 PR 内适配（新增/改动的接口实现）：'
+              echo ''
+              echo '```'
+              grep -E 'error TS' /tmp/typecheck.log | head -60 > /tmp/typecheck-errors.txt || true
+              if [ -s /tmp/typecheck-errors.txt ]; then
+                cat /tmp/typecheck-errors.txt
+              else
+                tail -60 /tmp/typecheck.log || true
+              fi
+              echo '```'
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub App token
         id: app-token
@@ -134,17 +158,24 @@ jobs:
           title: 'chore(openapi): sync contract from ${{ steps.fetch.outputs.tag }}'
           body: |
             🤖 自动同步后端 OpenAPI 契约
-            
+
             **契约来源**
             - Release Tag: `${{ steps.fetch.outputs.tag }}`
             - SHA256: `${{ steps.fetch.outputs.sha256 }}`
             - Asset URL: ${{ steps.fetch.outputs.asset_url }}
-            
+
             **变更内容**
             - 更新 `openapi/drone-backend.openapi.json`
             - 更新 `openapi/drone-backend.openapi.sha256`
             - 重新生成 `src/api/generated/openapi.d.ts`
-            
+
+            **待适配清单（本 PR 内处理）**
+
+            ${{ steps.worklist.outputs.worklist }}
+
+            > 本 PR 由机器人开启，只保证契约与生成物同源；`pnpm run typecheck` 失败**不阻断**本 PR。
+            > 适配完成后由人工合并，main 的 CI（`pnpm exec vue-tsc -b`）是最终门禁。
+
             ---
             _由 [contract-sync workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) 自动创建_
 
