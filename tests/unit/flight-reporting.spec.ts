@@ -5,6 +5,7 @@ import {
   FLIGHT_PROJECTION_POLL_MS, isFlightReporting, isLiveCapableStage, useFlightReporting,
   type FlightReporting,
 } from '../../src/composables/useFlightReporting'
+import { deferred } from '../support/deferred'
 
 const { getFlightProjection } = vi.hoisted(() => ({ getFlightProjection: vi.fn() }))
 vi.mock('../../src/api/modules/flight-record', () => ({ getFlightProjection }))
@@ -78,7 +79,7 @@ describe('flight reporting state (REQ-SUP-MON-007, ADR-0014)', () => {
     await flushPromises()
     expect(state.reporting.value).toBe(true)
 
-    const next = Promise.withResolvers<object>()
+    const next = deferred<object>()
     getFlightProjection.mockImplementationOnce(() => next.promise)
     orderId.value = 'o2'
     await flushPromises()
@@ -98,7 +99,7 @@ describe('flight reporting state (REQ-SUP-MON-007, ADR-0014)', () => {
   })
 
   it('stops polling on unmount and ignores a response that lands afterwards', async () => {
-    const late = Promise.withResolvers<object>()
+    const late = deferred<object>()
     getFlightProjection.mockResolvedValueOnce(stale).mockImplementationOnce(() => late.promise)
     const { wrapper, state } = harness()
     await flushPromises()
@@ -114,7 +115,7 @@ describe('flight reporting state (REQ-SUP-MON-007, ADR-0014)', () => {
   })
 
   it('ignores a late response for the previous order after switching orders', async () => {
-    const old = Promise.withResolvers<object>()
+    const old = deferred<object>()
     getFlightProjection.mockImplementationOnce(() => old.promise).mockResolvedValueOnce(stale)
     const { wrapper, state, orderId } = harness()
     await flushPromises()
@@ -129,7 +130,7 @@ describe('flight reporting state (REQ-SUP-MON-007, ADR-0014)', () => {
   })
 
   it('ignores an out-of-order older poll for the same order', async () => {
-    const first = Promise.withResolvers<object>()
+    const first = deferred<object>()
     getFlightProjection.mockImplementationOnce(() => first.promise).mockResolvedValueOnce(fresh)
     const { wrapper, state } = harness()
     await flushPromises()
@@ -142,8 +143,8 @@ describe('flight reporting state (REQ-SUP-MON-007, ADR-0014)', () => {
   })
 
   it('still applies a slow poll when no newer response has arrived', async () => {
-    const first = Promise.withResolvers<object>()
-    const second = Promise.withResolvers<object>()
+    const first = deferred<object>()
+    const second = deferred<object>()
     getFlightProjection.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise)
     const { wrapper, state } = harness()
     await flushPromises()

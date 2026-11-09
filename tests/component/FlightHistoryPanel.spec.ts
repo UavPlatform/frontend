@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import FlightHistoryPanel from '../../src/components/flight/FlightHistoryPanel.vue'
+import { deferred } from '../support/deferred'
 
 const { getFlightProjection, loadFlightHistory, onFlightTelemetry } = vi.hoisted(() => ({
   getFlightProjection: vi.fn(),
@@ -198,7 +199,7 @@ describe('FlightHistoryPanel', () => {
   })
 
   it('does not let a rejected old order request overwrite the current order after its projection resolves', async () => {
-    const pending = Promise.withResolvers<object>()
+    const pending = deferred<object>()
     loadFlightHistory.mockRejectedValueOnce(new Error('旧订单失败'))
     getFlightProjection.mockImplementationOnce(() => pending.promise)
     const wrapper = mountPanel(true)
