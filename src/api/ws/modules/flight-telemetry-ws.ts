@@ -1,21 +1,23 @@
-import type { FlightSample } from '../../modules/flight-record'
+import type { FlightEvent } from '../../modules/flight-record'
 import type { WsEnvelope } from '../ws-codec'
 import { getWsConnection } from '../ws-connection'
 
-export interface FlightTelemetryEvent extends FlightSample {
+/**
+ * FLIGHT_TELEMETRY：一条已提交的事件（ADR-0014）。
+ * 服务端只推已入库的投影事件，每次一帧一类读数，不合成 v1 采样快照。
+ */
+export interface FlightTelemetryEvent extends FlightEvent {
   orderId: string
-  modelCode?: string
-  modelName?: string
 }
 
-type FlightTelemetryCallback = (orderId: string, sample: FlightTelemetryEvent) => void
+type FlightTelemetryCallback = (orderId: string, event: FlightTelemetryEvent) => void
 
 const listeners = new Set<FlightTelemetryCallback>()
 let initialized = false
 
 const handleFlightTelemetry = (envelope: WsEnvelope) => {
   const data = envelope.data as FlightTelemetryEvent | undefined
-  if (envelope.type !== 'event' || !data?.orderId || data.capturedAt == null) return
+  if (envelope.type !== 'event' || !data?.orderId || data.capturedAt == null || !data.type) return
 
   for (const callback of listeners) {
     try {

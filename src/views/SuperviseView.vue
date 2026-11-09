@@ -7,7 +7,7 @@ import TelemetryPanel from '../components/order/TelemetryPanel.vue'
 import FlightHistoryPanel from '../components/flight/FlightHistoryPanel.vue'
 import { DISPATCH_STAGE_META, declaredCargoWeightKg } from '../api/modules/admin-dispatch'
 import { useDispatchOrderDetail } from '../composables/useDispatchOrderDetail'
-import { isLiveCapableStage, useFlightConnection } from '../composables/useFlightConnection'
+import { isLiveCapableStage, useFlightReporting } from '../composables/useFlightReporting'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,7 +16,7 @@ const { order, shipper, pilot, deviceId, loading } = useDispatchOrderDetail(orde
 
 const flightOrderId = computed(() => order.value?.orderId || orderId.value)
 const liveCapable = computed(() => isLiveCapableStage(order.value?.stage))
-const { connected } = useFlightConnection(flightOrderId, liveCapable)
+const { reporting } = useFlightReporting(flightOrderId, liveCapable)
 const declaredWeight = computed(() => declaredCargoWeightKg(order.value?.fields))
 const context = computed(() => [
   { label: '订单号', value: order.value?.orderId || '—' },
@@ -62,7 +62,7 @@ const back = () => {
         <div class="mt-4">
           <FlightHistoryPanel
             :order-id="flightOrderId"
-            :active="connected"
+            :active="reporting"
             :live-expected="liveCapable"
             :declared-payload-kg="declaredWeight"
           />

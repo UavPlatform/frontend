@@ -52,7 +52,6 @@ const CALLED_OPERATIONS: ReadonlyArray<readonly [method: string, path: string]> 
   ['get', '/admin/dispatch/orders/{orderId}'],
   ['get', '/dispatch/orders/{orderId}/flight'],
   ['get', '/dispatch/orders/{orderId}/flight/history'],
-  ['get', '/dispatch/orders/{orderId}/flight/track'],
   ['get', '/dispatch/orders/{orderId}/live'],
   ['post', '/dispatch/orders/{orderId}/live/{liveId}/watch'],
   ['get', '/config/map'],
@@ -122,10 +121,19 @@ const spec = JSON.parse(readFileSync(specPath, 'utf8')) as {
 }
 
 describe('OpenAPI 契约（消费侧门禁）', () => {
-  it('Web 不再消费远控开停播接口（后端合同仍声明，待新合同同步生成物）', () => {
-    // 不手改 vendor OpenAPI 或生成类型；仅约束当前手写消费层。
-    const remoteControlPaths = new Set(['/live/req', '/live/close'])
-    expect(collectCallSites().filter(([, path]) => remoteControlPaths.has(path))).toEqual([])
+  it('契约与消费层都不再出现已删除的 v1 遥测 / 远控端点', () => {
+    // 不手改 vendor OpenAPI 或生成类型；只断言同步进来的契约与手写消费层一致地不再使用 v1。
+    const removedV1Paths = [
+      '/api/ws/request',
+      '/live/req', '/live/close', '/live/rider/req',
+      '/dispatch/pilot/orders/{orderId}/flight-connections',
+      '/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/close',
+      '/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/samples',
+      '/dispatch/pilot/orders/{orderId}/flight-connections/{connectionId}/samples/batch',
+    ]
+    const stillDeclared = removedV1Paths.filter((path) => path in spec.paths)
+    expect(stillDeclared).toEqual([])
+    expect(collectCallSites().filter(([, path]) => removedV1Paths.includes(path))).toEqual([])
   })
 
   it('契约采用 LF 换行，与跨平台 checkout 及同步脚本一致', () => {

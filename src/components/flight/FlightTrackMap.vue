@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { getMapConfig } from '../../api/modules/map-config'
-import type { FlightSample } from '../../api/modules/flight-record'
+import type { FlightPoint } from '../../utils/flight-events'
 import { wgs84ToGcj02, type LngLat } from '../../utils/coordinate'
 
 type Coordinate = LngLat
@@ -24,12 +24,12 @@ type AMapInstance = {
   Marker: new (options: Record<string, unknown>) => Overlay
   Polyline: new (options: Record<string, unknown>) => Overlay
 }
-type TrackPoint = FlightSample & { latitude: number; longitude: number }
+type TrackPoint = FlightPoint
 
 const props = defineProps<{
-  samples: FlightSample[]
-  selected?: FlightSample
-  current?: FlightSample | null
+  samples: FlightPoint[]
+  selected?: FlightPoint
+  current?: FlightPoint | null
   gaps?: Array<{ from: number; to: number }>
   /** 轨迹归属（如订单号）；变化时视为新轨迹，重新铺满视野 */
   trackKey?: string
@@ -67,19 +67,17 @@ let endMarker: Overlay | undefined
 let fittedTrackKey: string | undefined
 let fittedPointCount = 0
 
-const sampleKey = (sample: FlightSample) => sample.sampleId != null
-  ? `id:${sample.sampleId}`
-  : `time:${sample.capturedAt}:${sample.connectionId ?? ''}`
-const toMapCoordinate = (sample: FlightSample): Coordinate =>
-  wgs84ToGcj02(sample.longitude!, sample.latitude!)
-const sampleTime = (sample: FlightSample) =>
-  sample.capturedAt == null ? '' : new Date(sample.capturedAt).toLocaleString()
+const sampleKey = (sample: FlightPoint) => `event:${sample.eventId}`
+const toMapCoordinate = (sample: FlightPoint): Coordinate => wgs84ToGcj02(sample.longitude, sample.latitude)
+const sampleTime = (sample: FlightPoint) => new Date(sample.capturedAt).toLocaleString()
 
-const breaksTrack = (previous: FlightSample, sample: FlightSample) => {
-  const connectionChanged = Boolean(
-    previous.connectionId && sample.connectionId && previous.connectionId !== sample.connectionId,
+/** 换机时轨迹必须断开：两架飞机的点连成一条线会伪造航迹。 */
+const breaksTrack = (previous: FlightPoint, sample: FlightPoint) => {
+  const aircraftChanged = Boolean(
+    previous.serialNumber && sample.serialNumber &&
+    (previous.serialNumber !== sample.serialNumber || previous.serialSource !== sample.serialSource),
   )
-  return connectionChanged || (props.gaps ?? []).some((gap) =>
+  return aircraftChanged || (props.gaps ?? []).some((gap) =>
     previous.capturedAt != null && sample.capturedAt != null &&
     previous.capturedAt <= gap.from && sample.capturedAt >= gap.to,
   )

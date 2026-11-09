@@ -11,6 +11,10 @@ async function api(page: Page) {
     const path = url.pathname.replace(/^\/api/, '')
     let data: unknown
     if (route.request().method() === 'POST') writes.push(path)
+    const event = (eventId: string, type: string, capturedAt: number, payload: Record<string, number>) => ({
+      eventId, type, capturedAt, receivedAt: capturedAt,
+      serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', modelCode: 'FC30', payload,
+    })
     if (path === '/admin/login') data = { token, admin: { id: 1, name: '管理员' } }
     else if (path === '/admin/dispatch/orders') data = { content: [], totalElements: 0, totalPages: 0 }
     else if (path.startsWith('/admin/dispatch/orders/')) data = {
@@ -22,44 +26,48 @@ async function api(page: Page) {
         fields: { weightMax: '12' },
       },
       shipper: { userName: '测试货主' }, pilot: { userName: '测试飞手' },
-      timeline: [], assignments: [], connections: path.endsWith('/TRACK')
+      timeline: [], assignments: [],
+      // 管理端连机记录仍由订单详情返回；它只用于「任务监管」页签可见性。
+      connections: path.endsWith('/TRACK')
         ? [{ connectionId: 'c1', serialNumber: 'SN-1', openedAt: new Date().toISOString(), endedAt: new Date().toISOString() }]
         : [],
     }
     else if (path === '/dispatch/orders/LIVE/flight') {
       const capturedAt = Date.now() - 45_000
       data = {
-        latest: {
-          sampleId: 3, capturedAt, receivedAt: new Date(capturedAt).toISOString(),
-          latitude: 30, longitude: 120, altitude: 42, speed: 3, battery: 75,
-        },
-        lastPosition: {
-          sampleId: 3, capturedAt, receivedAt: new Date(capturedAt).toISOString(),
-          latitude: 30, longitude: 120, altitude: 42, speed: 3, battery: 75,
-        },
-        // Realtime follows the aircraft connection (docs#22): an open connection has no endedAt.
-        connection: { connectionId: 'c1', serialNumber: 'SN-1', openedAt: new Date(capturedAt - 60_000).toISOString(), endedAt: null },
+        aircraft: [{ serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', modelCode: 'FC30', stale: false, latest: {} }],
+        lastPosition: event('p3', 'POSITION', capturedAt, { latitudeDegE7: 300_000_000, longitudeDegE7: 1_200_000_000 }),
+        flightPeriods: [{ serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: capturedAt - 60_000 }],
+        projectionRevision: 4,
+        stale: true,
+      }
+    }
+    else if (path === '/dispatch/orders/TRACK/flight') {
+      data = {
+        aircraft: [],
+        flightPeriods: [{ serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: Date.now() - 120_000, landedAt: Date.now() - 60_000 }],
+        projectionRevision: 3,
         stale: true,
       }
     }
     else if (path === '/dispatch/orders/IDLE/flight') {
-      const openedAt = new Date(Date.now() - 600_000).toISOString()
       data = {
-        connection: { connectionId: 'c0', serialNumber: 'SN-1', openedAt, endedAt: new Date(Date.now() - 300_000).toISOString() },
+        aircraft: [],
+        flightPeriods: [{ serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: Date.now() - 900_000, landedAt: Date.now() - 300_000 }],
+        projectionRevision: 2,
         stale: true,
-        connectionHistory: [],
       }
     }
     else if (['TRACK', 'LIVE', 'IDLE'].some((id) => path === `/dispatch/orders/${id}/flight/history`)) {
+      const now = Date.now()
       data = {
-        items: path.includes('/TRACK/')
+        items: path.endsWith('/TRACK/flight/history')
           ? [
-            { sampleId: 1, capturedAt: Date.now() - 10_000, latitude: 30, longitude: 120, altitude: 25 },
-            { sampleId: 2, capturedAt: Date.now(), latitude: 31, longitude: 121, altitude: 35 },
+            event('p1', 'POSITION', now - 10_000, { latitudeDegE7: 300_000_000, longitudeDegE7: 1_200_000_000 }),
+            event('alt1', 'ALTITUDE', now - 10_000, { altitudeMm: 25_000 }),
+            event('p2', 'POSITION', now, { latitudeDegE7: 310_000_000, longitudeDegE7: 1_210_000_000 }),
+            event('alt2', 'ALTITUDE', now, { altitudeMm: 35_000 }),
           ]
-          : [],
-        connections: path.includes('/TRACK/')
-          ? [{ connectionId: 'c1', serialNumber: 'SN-1', openedAt: new Date().toISOString(), endedAt: new Date().toISOString() }]
           : [],
         hasNext: false,
       }
@@ -67,6 +75,10 @@ async function api(page: Page) {
     else if (path === '/config/map') data = { key: '', serviceHost: null }
     else if (path === '/webUav/position') data = null
     else if (path === '/webUav/trajectory') data = []
+    else if (path === '/equipment/notifications') data = { content: [], totalElements: 0, totalPages: 0 }
+    else if (/^\/dispatch\/orders\/[^/]+\/live$/.test(path)) {
+      data = { configured: false, state: 'IDLE', liveId: null }
+    }
     else if (path === '/live/get') data = { liveState: 'IDLE', ackConfirmed: false }
     else if (path === '/live/leave') data = null
     else throw new Error(`Unmocked API request: ${route.request().method()} ${path}`)
@@ -81,7 +93,7 @@ async function login(page: Page) {
   await page.getByRole('button', { name: '进入管理中心', exact: true }).click()
 }
 
-test('地图未配置时仍能查看历史遥测、回放和连机记录', async ({ page }) => {
+test('地图未配置时仍能查看事件历史、回放和飞行区间', async ({ page }) => {
   await api(page)
   await page.goto('/orders/TRACK?tab=supervise')
   await login(page)
@@ -90,33 +102,29 @@ test('地图未配置时仍能查看历史遥测、回放和连机记录', async
   await expect(page.getByText('高度 25 m', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '播放轨迹', exact: true }).click()
   await expect(page.getByText('高度 35 m', { exact: true })).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: '设备连接' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '飞机' })).toBeVisible()
 })
 
-test('运输中订单载入当前遥测快照、标记中断并显示订单申报重量', async ({ page }) => {
+test('运输中订单载入最后位置、标记中断并显示订单申报重量', async ({ page }) => {
   await api(page)
   await page.goto('/orders/LIVE?tab=supervise')
   await login(page)
   await expect(page.getByText('信号中断', { exact: false }).first()).toBeVisible()
-  await expect(page.getByText('高度 42 m', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('下单申报 12 kg', { exact: true }).first()).toBeVisible()
 })
 
-test('全屏监管也载入运输中订单快照与申报重量', async ({ page }) => {
+test('全屏监管也载入运输中订单最后位置与申报重量', async ({ page }) => {
   await api(page)
   await page.goto('/orders/LIVE/supervise')
   await login(page)
   await expect(page.getByText('信号中断', { exact: false }).first()).toBeVisible()
-  await expect(page.getByText('高度 42 m', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('下单申报 12 kg', { exact: true }).first()).toBeVisible()
 })
 
-test('飞手到场但飞机未连机时实时区显示暂无数据', async ({ page }) => {
+test('飞手到场但无事件上报时实时区显示暂无数据', async ({ page }) => {
   await api(page)
-  // 订单详情的「任务监管」页签仍按阶段/连机记录显示，这里走全屏监管页。
   await page.goto('/orders/IDLE/supervise')
   await login(page)
   await expect(page.getByTestId('flight-live-empty')).toContainText('暂无数据')
   await expect(page.getByText('信号中断', { exact: false })).toHaveCount(0)
-  await expect(page.getByText('高度 42 m', { exact: true })).toHaveCount(0)
 })

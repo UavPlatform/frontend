@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
-  getFlightView,
+  getFlightProjection,
   loadFlightHistory,
-  type FlightConnection,
-  type FlightSample,
-  type FlightView,
+  type FlightEvent,
+  type FlightPeriod,
+  type FlightProjection,
 } from '../../api/modules/flight-record'
 import FlightTrackMap from './FlightTrackMap.vue'
+import { readingsAt, toFlightPoints, toFlightPoint, type FlightPoint } from '../../utils/flight-events'
 import {
   initFlightTelemetryWs,
   offFlightTelemetry,
@@ -17,15 +18,15 @@ import {
 
 const props = defineProps<{
   orderId: string
-  /** 飞机已连机：订阅实时遥测并显示实时位置 */
+  /** 有事件正在进来：订阅实时事件并显示实时位置 */
   active?: boolean
-  /** 订单处于可连机阶段（飞手到场后）；未连机时实时区显示「暂无数据」 */
+  /** 订单处于可飞阶段（飞手到场后）；无数据时实时区显示「暂无数据」 */
   liveExpected?: boolean
   declaredPayloadKg?: string
 }>()
 
-const samples = ref<FlightSample[]>([])
-const connections = ref<FlightConnection[]>([])
+const events = ref<FlightEvent[]>([])
+const periods = ref<FlightPeriod[]>([])
 const loading = ref(false)
 const error = ref('')
 const selectedIndex = ref(0)
@@ -42,90 +43,96 @@ let loadedOrderId = ''
 let timer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
 
-const selected = computed(() => samples.value[selectedIndex.value])
-/** 实时数据只在连机期间展示；断开后不再把最后一帧当作实时数据。 */
-const liveLatest = computed(() => (props.active ? latest.value : null))
-const liveSample = computed<FlightSample | null>(() =>
-  liveLatest.value && followingLive.value ? { ...liveLatest.value } : null,
+/** 地图只画 POSITION 事件；其它类型是读数，不产生轨迹点。 */
+const points = computed(() => toFlightPoints(events.value))
+const selected = computed<FlightPoint | undefined>(() => points.value[selectedIndex.value])
+/** 实时点：只有订单在飞且仍在收事件时才把最后一帧当作实时数据。 */
+const livePoint = computed<FlightPoint | null>(() => {
+  const event = props.active ? latest.value : null
+  return event ? toFlightPoint(event) ?? null : null
+})
+const liveSample = computed<FlightPoint | null>(() =>
+  livePoint.value && followingLive.value ? { ...livePoint.value } : null,
 )
+/** 选中时刻的各类读数，各自带采集时间；不做跨类型合成。 */
+const selectedReadings = computed(() => readingsAt(events.value, selected.value?.capturedAt))
+const liveReadings = computed(() => readingsAt(events.value))
 const liveInterruptionMs = computed(() => {
   if (latest.value?.capturedAt == null) return 0
-  const receivedAt = latest.value.receivedAt == null
-    ? undefined
-    : new Date(latest.value.receivedAt).getTime()
+  const receivedAt = latest.value.receivedAt
   return Math.max(
     serverReportsStale.value ? MAX_SAMPLE_GAP_MS : 0,
     now.value - latest.value.capturedAt,
-    receivedAt == null || !Number.isFinite(receivedAt) ? 0 : now.value - receivedAt,
+    receivedAt == null ? 0 : now.value - receivedAt,
   )
 })
-const gaps = computed(() => samples.value.slice(1).flatMap((sample, index) => {
-  const previous = samples.value[index]
-  if (previous.capturedAt == null || sample.capturedAt == null) return []
-  if (sample.capturedAt - previous.capturedAt <= MAX_SAMPLE_GAP_MS) return []
-  return [{ from: previous.capturedAt, to: sample.capturedAt }]
+const gaps = computed(() => points.value.slice(1).flatMap((point, index) => {
+  const previous = points.value[index]
+  if (point.capturedAt - previous.capturedAt <= MAX_SAMPLE_GAP_MS) return []
+  return [{ from: previous.capturedAt, to: point.capturedAt }]
 }))
+/** 超过保留期：有飞行区间记录、但事件已被 180 天清理。 */
 const retentionExpired = computed(() => {
-  if (samples.value.length || latest.value) return false
-  const ended = connections.value
-    .map((connection) => connection.endedAt ? new Date(connection.endedAt).getTime() : Number.NaN)
-    .filter(Number.isFinite)
-  if (ended.length === 0 || ended.length !== connections.value.length) return false
-  return Date.now() - Math.max(...ended) > RETENTION_MS
+  if (events.value.length || latest.value || periods.value.length === 0) return false
+  const landed = periods.value
+    .map((period) => period.landedAt)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+  if (landed.length === 0 || landed.length !== periods.value.length) return false
+  return Date.now() - Math.max(...landed) > RETENTION_MS
 })
 
 const stop = () => {
   playing.value = false
-  if (timer !== undefined) clearInterval(timer)
+  clearInterval(timer)
   timer = undefined
 }
 const togglePlayback = () => {
   if (playing.value) { stop(); return }
-  if (samples.value.length < 2) return
+  if (points.value.length < 2) return
   followingLive.value = false
-  if (selectedIndex.value >= samples.value.length - 1) selectedIndex.value = 0
+  if (selectedIndex.value >= points.value.length - 1) selectedIndex.value = 0
   playing.value = true
   timer = setInterval(() => {
-    if (selectedIndex.value >= samples.value.length - 1) { stop(); return }
+    if (selectedIndex.value >= points.value.length - 1) { stop(); return }
     selectedIndex.value += 1
   }, 700)
 }
 const returnToLive = () => {
   stop()
   followingLive.value = true
-  selectedIndex.value = Math.max(0, samples.value.length - 1)
+  selectedIndex.value = Math.max(0, points.value.length - 1)
 }
-const applyLiveSnapshot = (view: FlightView | null) => {
-  if (!props.active || !view) return
-  const viewSample = view.latest ?? view.lastPosition
-  const newestHistorySample = samples.value[samples.value.length - 1]
-  const newestLiveSample = latest.value
-  const candidates = [viewSample, newestHistorySample, newestLiveSample]
-    .filter((sample): sample is FlightSample => sample != null && sample.capturedAt != null)
-  const seed = candidates.sort((a, b) => (a.capturedAt ?? 0) - (b.capturedAt ?? 0)).at(-1)
-  if (seed) {
-    latest.value = { ...seed, orderId: props.orderId }
-    const key = seed.sampleId != null
-      ? `id:${seed.sampleId}`
-      : `time:${seed.capturedAt}:${seed.connectionId}`
-    const known = samples.value.some((sample) => (sample.sampleId != null
-      ? `id:${sample.sampleId}`
-      : `time:${sample.capturedAt}:${sample.connectionId}`) === key)
-    if (!known) {
-      samples.value = [...samples.value, seed].sort((a, b) => (a.capturedAt ?? 0) - (b.capturedAt ?? 0))
-      if (followingLive.value) selectedIndex.value = samples.value.length - 1
-    }
+/**
+ * 投影总是读取：起降区间与「所用飞机」是结单后回放的依据，不依赖是否在实时。
+ * 只有订单在飞时才把最后位置并进轨迹——投影可能领先于本页历史分页。
+ */
+const applyProjection = (projection: FlightProjection | null) => {
+  if (!projection) return
+  periods.value = projection.flightPeriods ?? []
+  if (!props.active) return
+  const last = projection.lastPosition
+  if (!last?.capturedAt) return
+  const point = toFlightPoint(last)
+  if (!point) return
+  // 首帧实时位置可能先于任何 WebSocket 事件到达，投影就是它的来源。
+  if (!latest.value || last.capturedAt! >= (latest.value.capturedAt ?? 0)) {
+    latest.value = { ...last, orderId: props.orderId }
   }
-  serverReportsStale.value = Boolean(view.stale) &&
-    (!newestLiveSample || (viewSample?.capturedAt ?? 0) >= (newestLiveSample.capturedAt ?? 0))
+  const known = events.value.some((event) => event.eventId === point.eventId)
+  if (!known) {
+    events.value = [...events.value, last].sort((left, right) =>
+      (left.capturedAt ?? 0) - (right.capturedAt ?? 0) || (left.eventId ?? '').localeCompare(right.eventId ?? ''))
+    if (followingLive.value) selectedIndex.value = Math.max(0, points.value.length - 1)
+  }
+  serverReportsStale.value = Boolean(projection.stale)
 }
 const load = async () => {
   const current = ++sequence
   stop()
   if (loadedOrderId !== props.orderId) {
     loadedOrderId = props.orderId
-    samples.value = []
-    connections.value = []
+    events.value = []
+    periods.value = []
     latest.value = null
     serverReportsStale.value = false
     followingLive.value = true
@@ -136,112 +143,98 @@ const load = async () => {
   loading.value = false
   if (!props.orderId) return
   loading.value = true
-  const viewPromise = props.active
-    ? getFlightView(props.orderId).catch(() => null)
-    : Promise.resolve(null)
+  const projectionPromise = getFlightProjection(props.orderId).catch(() => null)
   try {
     const result = await loadFlightHistory(props.orderId)
-    const view = await viewPromise
+    const projection = await projectionPromise
     if (current !== sequence) return
-    // A websocket point can arrive while history is loading.
-    const merged = new Map<string, FlightSample>()
-    for (const sample of [...(result.items ?? []), ...samples.value]) {
-      const key = sample.sampleId != null
-        ? `id:${sample.sampleId}`
-        : `time:${sample.capturedAt}:${sample.connectionId}`
-      merged.set(key, sample)
+    // 历史分页与 WebSocket 可能同时到达：按 eventId 去重后统一按 (capturedAt,eventId) 排序。
+    const merged = new Map<string, FlightEvent>()
+    for (const event of [...(result.items ?? []), ...events.value]) {
+      const key = event.eventId ?? `${event.capturedAt}:${event.type}`
+      merged.set(key, event)
     }
-    samples.value = [...merged.values()].sort((a, b) => (a.capturedAt ?? 0) - (b.capturedAt ?? 0))
-    applyLiveSnapshot(view)
-    if (props.active && followingLive.value && samples.value.length) {
-      selectedIndex.value = samples.value.length - 1
-    } else if (samples.value.length) {
-      selectedIndex.value = Math.min(selectedIndex.value, samples.value.length - 1)
+    events.value = [...merged.values()].sort((left, right) =>
+      (left.capturedAt ?? 0) - (right.capturedAt ?? 0) || (left.eventId ?? '').localeCompare(right.eventId ?? ''))
+    applyProjection(projection)
+    if (props.active && followingLive.value && points.value.length) {
+      selectedIndex.value = points.value.length - 1
+    } else if (points.value.length) {
+      selectedIndex.value = Math.min(selectedIndex.value, points.value.length - 1)
     } else {
       selectedIndex.value = 0
     }
-    connections.value = result.connections ?? []
     resultHasNext.value = result.hasNext ?? false
   } catch (cause) {
     if (current !== sequence) return
-    const view = await viewPromise
+    const projection = await projectionPromise
     if (current === sequence) {
-      applyLiveSnapshot(view)
-      error.value = cause instanceof Error ? cause.message : '历史遥测读取失败'
+      applyProjection(projection)
+      error.value = cause instanceof Error ? cause.message : '事件历史读取失败'
     }
   } finally {
     if (current === sequence) loading.value = false
   }
 }
-const handleLiveSample = (incomingOrderId: string, sample: FlightTelemetryEvent) => {
+const handleLiveEvent = (incomingOrderId: string, event: FlightTelemetryEvent) => {
   if (incomingOrderId !== props.orderId) return
-  if (sample.capturedAt == null || !Number.isFinite(sample.capturedAt)) return
-  const latestAt = latest.value?.capturedAt
-  if (latestAt != null && sample.capturedAt < latestAt) return
-  if (latestAt === sample.capturedAt) {
-    const incomingId = sample.sampleId ?? sample.sequence
-    const currentId = latest.value?.sampleId ?? latest.value?.sequence
-    if (incomingId == null || currentId == null || incomingId <= currentId) return
-  }
-  latest.value = sample
+  if (event.capturedAt == null || !Number.isFinite(event.capturedAt)) return
+  if (events.value.some((known) => known.eventId === event.eventId)) return
+  latest.value = event
   serverReportsStale.value = false
-  const last = samples.value[samples.value.length - 1]
-  if (last?.capturedAt == null || sample.capturedAt > last.capturedAt) {
-    samples.value = [...samples.value, sample]
-    if (followingLive.value) selectedIndex.value = samples.value.length - 1
-  }
+  events.value = [...events.value, event].sort((left, right) =>
+    (left.capturedAt ?? 0) - (right.capturedAt ?? 0) || (left.eventId ?? '').localeCompare(right.eventId ?? ''))
+  if (event.type === 'POSITION' && followingLive.value) selectedIndex.value = Math.max(0, points.value.length - 1)
 }
-const formatTime = (value?: number | string) =>
+const formatTime = (value?: number | string | null) =>
   value == null ? '—' : new Date(typeof value === 'number' ? value : value).toLocaleString()
-const connectionLabel = (connection: FlightConnection) =>
-  [connection.modelName, connection.serialNumber].filter(Boolean).join(' · ') || connection.connectionId || '设备连接'
+const aircraftLabel = (period: FlightPeriod) =>
+  [period.serialNumber, period.serialSource].filter(Boolean).join(' · ') || '未知机身'
 watch(() => [props.orderId, props.active] as const, load, { immediate: true })
 watch(() => props.active, (active) => {
   if (active) {
-    onFlightTelemetry(handleLiveSample)
+    onFlightTelemetry(handleLiveEvent)
     initFlightTelemetryWs()
   } else {
-    offFlightTelemetry(handleLiveSample)
+    offFlightTelemetry(handleLiveEvent)
   }
 }, { immediate: true })
 onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 1_000) })
 onBeforeUnmount(() => {
   sequence += 1
   stop()
-  if (clockTimer !== undefined) clearInterval(clockTimer)
-  offFlightTelemetry(handleLiveSample)
+  clearInterval(clockTimer)
+  offFlightTelemetry(handleLiveEvent)
 })
 </script>
 
 <template>
   <section class="panel-card p-4 flight-history" v-loading="loading">
     <div class="flight-history__head">
-      <div class="panel-title">历史遥测与轨迹</div>
+      <div class="panel-title">事件历史与轨迹</div>
       <el-button size="small" :loading="loading" @click="load">刷新</el-button>
     </div>
-    <div v-if="liveLatest" class="flight-history__live" role="status">
+    <div v-if="livePoint" class="flight-history__live" role="status">
       <strong>实时遥测</strong>
-      <span>上报 {{ formatTime(liveLatest.capturedAt) }}</span>
-      <span>高度 {{ liveLatest.altitude ?? '—' }} m</span>
-      <span>速度 {{ liveLatest.speed ?? '—' }} m/s</span>
-      <span>电量 {{ liveLatest.battery ?? '—' }}%</span>
+      <span>上报 {{ formatTime(livePoint.capturedAt) }}</span>
+      <span v-for="reading in liveReadings" :key="reading.type">{{ reading.label }} {{ reading.value }}</span>
       <span>下单申报 {{ props.declaredPayloadKg ?? '—' }} kg</span>
     </div>
     <div v-else-if="props.liveExpected" class="flight-history__live" role="status" data-testid="flight-live-empty">
       <strong>实时遥测</strong>
       <span>暂无数据</span>
     </div>
-    <div v-if="liveLatest && (serverReportsStale || liveInterruptionMs >= MAX_SAMPLE_GAP_MS)" class="flight-history__outages" role="status">
+    <div v-if="livePoint && (serverReportsStale || liveInterruptionMs >= MAX_SAMPLE_GAP_MS)" class="flight-history__outages" role="status">
       信号中断 · 已中断 {{ Math.floor(liveInterruptionMs / 1000) }} 秒，地图停留在最后位置
     </div>
     <div v-if="error" class="flight-history__empty" role="alert">{{ error }}</div>
     <div v-if="!loading && !error && retentionExpired" class="flight-history__empty" role="status">
       已超过保留期（180 天），轨迹与历史遥测不可查
     </div>
-    <div v-else-if="!loading && !error && samples.length === 0 && !liveLatest" class="flight-history__empty">
+    <div v-else-if="!loading && !error && points.length === 0 && !livePoint" class="flight-history__empty">
       暂无遥测数据
     </div>
-    <template v-if="samples.length">
+    <template v-if="points.length">
       <div v-if="gaps.length" class="flight-history__outages" role="status">
         <strong>遥测中断区间</strong>
         <span v-for="gap in gaps" :key="`${gap.from}-${gap.to}`">
@@ -249,38 +242,38 @@ onBeforeUnmount(() => {
           （{{ Math.max(1, Math.round((gap.to - gap.from) / 1000)) }} 秒）
         </span>
       </div>
-      <FlightTrackMap :samples="samples" :selected="selected" :gaps="gaps" :current="liveSample" :track-key="props.orderId" />
+      <FlightTrackMap :samples="points" :selected="selected" :gaps="gaps" :current="liveSample" :track-key="props.orderId" />
       <div class="flight-history__controls">
-        <el-button size="small" :disabled="samples.length < 2" @click="togglePlayback">
+        <el-button size="small" :disabled="points.length < 2" @click="togglePlayback">
           {{ playing ? '暂停' : '播放轨迹' }}
         </el-button>
-        <el-button v-if="liveLatest && !followingLive" size="small" @click="returnToLive">返回实时位置</el-button>
-        <el-slider v-model="selectedIndex" aria-label="轨迹回放时间轴" :min="0" :max="Math.max(0, samples.length - 1)" :show-tooltip="false" @update:model-value="followingLive = false; stop()" />
-        <span>{{ selectedIndex + 1 }} / {{ samples.length }}</span>
+        <el-button v-if="livePoint && !followingLive" size="small" @click="returnToLive">返回实时位置</el-button>
+        <el-slider v-model="selectedIndex" aria-label="轨迹回放时间轴" :min="0" :max="Math.max(0, points.length - 1)" :show-tooltip="false" @update:model-value="followingLive = false; stop()" />
+        <span>{{ selectedIndex + 1 }} / {{ points.length }}</span>
       </div>
       <div class="flight-history__metrics">
         <span>采集 {{ formatTime(selected?.capturedAt) }}</span>
-        <span>高度 {{ selected?.altitude ?? '—' }} m</span>
-        <span>速度 {{ selected?.speed ?? '—' }} m/s</span>
-        <span>电量 {{ selected?.battery ?? '—' }}%</span>
+        <span v-for="reading in selectedReadings" :key="reading.type">
+          {{ reading.label }} {{ reading.value }}
+          <small v-if="reading.capturedAt !== selected?.capturedAt">（{{ formatTime(reading.capturedAt) }}）</small>
+        </span>
         <span>下单申报 {{ props.declaredPayloadKg ?? '—' }} kg</span>
       </div>
     </template>
-    <FlightTrackMap v-else-if="liveLatest" :samples="[]" :current="liveSample" :track-key="props.orderId" />
-    <el-table v-if="connections.length" :data="connections" size="small" max-height="220" empty-text="暂无连机记录">
-      <el-table-column label="设备连接" min-width="150">
-        <template #default="{ row }">{{ connectionLabel(row) }}</template>
+    <FlightTrackMap v-else-if="livePoint" :samples="[]" :current="liveSample" :track-key="props.orderId" />
+    <el-table v-if="periods.length" :data="periods" size="small" max-height="220" empty-text="暂无飞行区间">
+      <el-table-column label="飞机" min-width="170">
+        <template #default="{ row }">{{ aircraftLabel(row) }}</template>
       </el-table-column>
-      <el-table-column label="开始" min-width="150">
-        <template #default="{ row }">{{ formatTime(row.openedAt) }}</template>
+      <el-table-column label="起飞" min-width="150">
+        <template #default="{ row }">{{ formatTime(row.takeoffAt) }}</template>
       </el-table-column>
-      <el-table-column label="结束" min-width="150">
-        <template #default="{ row }">{{ formatTime(row.endedAt) }}</template>
+      <el-table-column label="降落" min-width="150">
+        <template #default="{ row }">{{ formatTime(row.landedAt) }}</template>
       </el-table-column>
-      <el-table-column prop="endReason" label="结束原因" min-width="110" />
     </el-table>
     <div v-if="resultHasNext" class="flight-history__empty" role="status">
-      历史数据尚未全部加载，当前显示 {{ samples.length.toLocaleString() }} 条；轨迹可能不完整，请刷新重试。
+      历史数据尚未全部加载，当前显示 {{ events.length.toLocaleString() }} 条事件；轨迹可能不完整，请刷新重试。
     </div>
   </section>
 </template>
@@ -298,15 +291,16 @@ onBeforeUnmount(() => {
 .flight-history__outages {
   display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin: 0.75rem 0;
   padding: 0.65rem 0.8rem; border-left: 3px solid var(--warning);
-  background: var(--bg-sunken); color: var(--text-regular); font-size: 0.82rem;
+  background: var(--bg-sunken); font-size: 0.82rem;
 }
 .flight-history__controls { margin-top: 0.5rem; }
 .flight-history__controls .el-slider { flex: 1; }
 .flight-history__metrics {
-  flex-wrap: wrap; margin: 0.5rem 0 0.75rem; color: var(--text-regular); font-size: 0.82rem;
+  flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);
 }
+.flight-history__metrics small { color: var(--text-secondary); opacity: 0.8; }
 .flight-history__empty { padding: 1rem 0; color: var(--text-secondary); }
-@media (max-width: 640px) {
+@media (max-width: 720px) {
   .flight-history__controls { flex-wrap: wrap; }
   .flight-history__controls .el-slider { flex-basis: 100%; order: 1; }
 }

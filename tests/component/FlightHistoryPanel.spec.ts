@@ -1,15 +1,16 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import FlightHistoryPanel from '../../src/components/flight/FlightHistoryPanel.vue'
+import { deferred } from '../support/deferred'
 
-const { getFlightView, loadFlightHistory, onFlightTelemetry } = vi.hoisted(() => ({
-  getFlightView: vi.fn(),
+const { getFlightProjection, loadFlightHistory, onFlightTelemetry } = vi.hoisted(() => ({
+  getFlightProjection: vi.fn(),
   loadFlightHistory: vi.fn(),
   onFlightTelemetry: vi.fn<(
-    handler: (orderId: string, sample: { capturedAt: number; latitude: number; longitude: number }) => void,
+    handler: (orderId: string, event: { eventId?: string; type?: string; capturedAt: number }) => void,
   ) => void>(),
 }))
-vi.mock('../../src/api/modules/flight-record', () => ({ getFlightView, loadFlightHistory }))
+vi.mock('../../src/api/modules/flight-record', () => ({ getFlightProjection, loadFlightHistory }))
 vi.mock('../../src/api/ws/modules/flight-telemetry-ws', () => ({
   initFlightTelemetryWs: vi.fn(),
   offFlightTelemetry: vi.fn(),
@@ -23,18 +24,28 @@ vi.mock('../../src/components/flight/FlightTrackMap.vue', () => ({
   },
 }))
 
+const position = (eventId: string, capturedAt: number, latitudeDegE7: number, longitudeDegE7: number) => ({
+  eventId, type: 'POSITION', capturedAt, receivedAt: capturedAt,
+  serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', payload: { latitudeDegE7, longitudeDegE7 },
+})
+const reading = (eventId: string, type: string, capturedAt: number, payload: Record<string, unknown>) => ({
+  eventId, type, capturedAt, receivedAt: capturedAt, serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', payload,
+})
+
 describe('FlightHistoryPanel', () => {
   const mounted: Array<ReturnType<typeof mount>> = []
 
   beforeEach(() => {
     vi.resetAllMocks()
-    getFlightView.mockResolvedValue(null)
+    getFlightProjection.mockResolvedValue(null)
     loadFlightHistory.mockResolvedValue({
       items: [
-        { sampleId: 1, capturedAt: 1_000, latitude: 30, longitude: 120, altitude: 25, speed: 4, battery: 80 },
-        { sampleId: 2, capturedAt: 8_000, latitude: 30.1, longitude: 120.1, altitude: 35, speed: 5, battery: 79 },
+        position('p1', 1_000, 300_000_000, 1_200_000_000),
+        reading('alt1', 'ALTITUDE', 1_000, { altitudeMm: 25_000 }),
+        position('p2', 8_000, 301_000_000, 1_201_000_000),
+        reading('b1', 'BATTERY', 8_000, { chargePermille: 790 }),
       ],
-      connections: [{ connectionId: 'c1', modelName: 'FlyCart', serialNumber: 'SN-1', openedAt: '2026-10-25T00:00:00Z', endedAt: '2026-10-25T00:01:00Z', endReason: 'RETURNED' }],
+      hasNext: false,
     })
   })
 
@@ -48,8 +59,8 @@ describe('FlightHistoryPanel', () => {
           template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
         },
         'el-slider': { props: ['modelValue'], template: '<input type="range" :value="modelValue" />' },
-        'el-table': { props: ['data'], template: '<div><slot /></div>' },
-        'el-table-column': { props: ['label', 'prop'], template: '<div><slot :row="row" /></div>', setup: () => ({ row: { modelName: 'FlyCart', serialNumber: 'SN-1', openedAt: '2026-10-25T00:00:00Z', endedAt: '2026-10-25T00:01:00Z', endReason: 'RETURNED' } }) },
+        'el-table': { props: ['data'], template: '<div data-testid="periods">{{ JSON.stringify(data) }}</div>' },
+        'el-table-column': { props: ['label'], template: '<div>{{ label }}</div>' },
         'v-loading': true,
       },
     },
@@ -61,7 +72,7 @@ describe('FlightHistoryPanel', () => {
     vi.resetAllMocks()
   })
 
-  it('passes samples and outage intervals to the map and renders telemetry and connection identity', async () => {
+  it('draws only POSITION events and shows each reading with its own capture time', async () => {
     const wrapper = mountPanel()
     mounted.push(wrapper)
     await flushPromises()
@@ -69,12 +80,13 @@ describe('FlightHistoryPanel', () => {
     expect(wrapper.get('[data-testid="flight-track-map"]').attributes('data-points')).toBe('2')
     expect(wrapper.get('[data-testid="flight-track-map"]').attributes('data-gaps')).toBe('1')
     expect(wrapper.text()).toContain('遥测中断区间')
+    // Selected point is the first POSITION; only readings captured at or before it are shown.
     expect(wrapper.text()).toContain('高度 25 m')
-    expect(wrapper.text()).toContain('FlyCart · SN-1')
+    expect(wrapper.text()).not.toContain('电量')
   })
 
-  it('shows an empty state when there is no telemetry', async () => {
-    loadFlightHistory.mockResolvedValueOnce({ items: [], connections: [] })
+  it('shows an empty state when no event exists', async () => {
+    loadFlightHistory.mockResolvedValueOnce({ items: [], hasNext: false })
     const wrapper = mountPanel()
     mounted.push(wrapper)
     await flushPromises()
@@ -82,23 +94,30 @@ describe('FlightHistoryPanel', () => {
     expect(wrapper.find('[data-testid="flight-track-map"]').exists()).toBe(false)
   })
 
-  it('explains when all connection history is outside the retention period', async () => {
-    const expiredAt = new Date(Date.now() - 181 * 24 * 60 * 60 * 1000).toISOString()
-    loadFlightHistory.mockResolvedValueOnce({
-      items: [],
-      connections: [{ connectionId: 'old', endedAt: expiredAt }],
+  it('lists flight periods reported by the projection instead of connection records', async () => {
+    const landedAt = Date.now() - 181 * 24 * 60 * 60 * 1000
+    loadFlightHistory.mockResolvedValueOnce({ items: [], hasNext: false })
+    getFlightProjection.mockResolvedValueOnce({
+      aircraft: [],
+      flightPeriods: [{ serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: landedAt - 60_000, landedAt }],
+      stale: true,
     })
     const wrapper = mountPanel()
     mounted.push(wrapper)
     await flushPromises()
     expect(wrapper.text()).toContain('已超过保留期（180 天）')
+    expect(wrapper.get('[data-testid="periods"]').text()).toContain('SN-1')
   })
 
-  it('does not classify a still-active connection as expired', async () => {
-    const expiredAt = new Date(Date.now() - 181 * 24 * 60 * 60 * 1000).toISOString()
-    loadFlightHistory.mockResolvedValueOnce({
-      items: [],
-      connections: [{ connectionId: 'old', endedAt: expiredAt }, { connectionId: 'active' }],
+  it('does not classify a still-open flight period as expired', async () => {
+    loadFlightHistory.mockResolvedValueOnce({ items: [], hasNext: false })
+    getFlightProjection.mockResolvedValueOnce({
+      aircraft: [],
+      flightPeriods: [
+        { serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: 1_000, landedAt: 2_000 },
+        { serialNumber: 'SN-1', serialSource: 'FLIGHT_CONTROLLER', takeoffAt: 3_000 },
+      ],
+      stale: true,
     })
     const wrapper = mountPanel()
     mounted.push(wrapper)
@@ -107,20 +126,15 @@ describe('FlightHistoryPanel', () => {
     expect(wrapper.text()).not.toContain('已超过保留期')
   })
 
-  it('shows the signal interruption duration and keeps connection records without samples', async () => {
+  it('shows the signal interruption duration for an active order', async () => {
     vi.useFakeTimers()
-    const openedAt = '2026-10-25T00:00:00Z'
-    loadFlightHistory.mockResolvedValueOnce({
-      items: [],
-      connections: [{ connectionId: 'c1', openedAt, modelName: 'FlyCart' }],
-    })
     const wrapper = mountPanel(true)
     mounted.push(wrapper)
     await flushPromises()
     const handler = onFlightTelemetry.mock.calls[0][0]
-    handler('dispatch-order-id', { capturedAt: Date.now(), latitude: 30, longitude: 120 })
+    handler('dispatch-order-id', position('p9', Date.now(), 300_000_000, 1_200_000_000))
     await flushPromises()
-    expect(wrapper.text()).toContain('FlyCart')
+    expect(wrapper.text()).toContain('实时遥测')
     expect(wrapper.text()).not.toContain('信号中断')
 
     await vi.advanceTimersByTimeAsync(6_000)
@@ -133,7 +147,7 @@ describe('FlightHistoryPanel', () => {
     mounted.push(wrapper)
     await flushPromises()
     const handler = onFlightTelemetry.mock.calls[0][0]
-    handler('dispatch-order-id', { capturedAt: 10_000, latitude: 31, longitude: 121 })
+    handler('dispatch-order-id', position('p3', 10_000, 310_000_000, 1_210_000_000))
     await flushPromises()
     const map = wrapper.findComponent({ name: 'FlightTrackMap' })
     expect(map.props('samples')).toHaveLength(3)
@@ -146,34 +160,18 @@ describe('FlightHistoryPanel', () => {
     expect(map.props('current')).toMatchObject({ capturedAt: 10_000 })
   })
 
-  it('loads the current flight snapshot for an active order and reports backend stale state', async () => {
-    const sample = {
-      sampleId: 3,
-      capturedAt: Date.now() - 45_000,
-      latitude: 30.5,
-      longitude: 120.5,
-      altitude: 42,
-      speed: 3,
-      battery: 75,
-    }
-    getFlightView.mockResolvedValueOnce({ latest: sample, lastPosition: sample, stale: true })
-    const wrapper = mount(FlightHistoryPanel, {
-      props: { orderId: 'dispatch-order-id', active: true },
-      global: {
-        stubs: {
-          'el-button': true,
-          'el-slider': true,
-          'el-table': true,
-          'el-table-column': true,
-          'v-loading': true,
-        },
-      },
-    })
+  it('seeds the live track from the projection last position and reports backend stale state', async () => {
+    const lastPosition = position('p7', Date.now() - 45_000, 305_000_000, 1_205_000_000)
+    getFlightProjection.mockResolvedValueOnce({ aircraft: [], lastPosition, stale: true })
+    const wrapper = mountPanel(true)
     mounted.push(wrapper)
     await flushPromises()
-    expect(getFlightView).toHaveBeenCalledWith('dispatch-order-id')
+    expect(getFlightProjection).toHaveBeenCalledWith('dispatch-order-id')
     expect(wrapper.text()).toContain('信号中断')
-    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toMatchObject(sample)
+    // The map receives a decoded point, not the raw event: degE7 is converted once at the boundary.
+    expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toMatchObject({
+      eventId: 'p7', capturedAt: lastPosition.capturedAt, latitude: 30.5, longitude: 120.5,
+    })
   })
 
   it('keeps the last successful history and map visible when refreshing fails', async () => {
@@ -189,56 +187,48 @@ describe('FlightHistoryPanel', () => {
     expect(wrapper.text()).toContain('高度 25 m')
   })
 
-  it('shows live samples even when the history service fails', async () => {
+  it('shows live events even when the history service fails', async () => {
     loadFlightHistory.mockRejectedValueOnce(new Error('历史读取失败'))
     const wrapper = mountPanel(true)
     mounted.push(wrapper)
     await flushPromises()
-    onFlightTelemetry.mock.calls[0][0]('dispatch-order-id', {
-      capturedAt: Date.now(), latitude: 30, longitude: 120,
-    })
+    onFlightTelemetry.mock.calls[0][0]('dispatch-order-id', position('p4', Date.now(), 300_000_000, 1_200_000_000))
     await flushPromises()
     expect(wrapper.text()).toContain('历史读取失败')
     expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('samples')).toHaveLength(1)
   })
 
-  it('does not let a rejected old order request overwrite the current order after its snapshot resolves', async () => {
-    let rejectOld!: (cause: Error) => void
-    let resolveOldView!: (view: object) => void
-    loadFlightHistory.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject }))
-    getFlightView.mockImplementationOnce(() => new Promise((resolve) => { resolveOldView = resolve }))
+  it('does not let a rejected old order request overwrite the current order after its projection resolves', async () => {
+    const pending = deferred<object>()
+    loadFlightHistory.mockRejectedValueOnce(new Error('旧订单失败'))
+    getFlightProjection.mockImplementationOnce(() => pending.promise)
     const wrapper = mountPanel(true)
     mounted.push(wrapper)
-    rejectOld(new Error('旧订单失败'))
     await flushPromises()
     await wrapper.setProps({ orderId: 'new-order' })
     await flushPromises()
-    resolveOldView({ latest: { capturedAt: Date.now(), altitude: 999 }, stale: false })
+    pending.resolve({ aircraft: [], lastPosition: position('old', Date.now(), 300_000_000, 1_200_000_000), stale: false })
     await flushPromises()
     expect(wrapper.text()).not.toContain('旧订单失败')
-    expect(wrapper.text()).not.toContain('999')
     expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('samples')).toHaveLength(2)
   })
 
-  it('shows 暂无数据 for realtime after pilot arrival while the aircraft is not connected', async () => {
+  it('shows 暂无数据 for realtime after pilot arrival while nothing is reporting', async () => {
     const wrapper = mountPanel(false, true)
     mounted.push(wrapper)
     await flushPromises()
     expect(wrapper.get('[data-testid="flight-live-empty"]').text()).toContain('暂无数据')
     expect(onFlightTelemetry).not.toHaveBeenCalled()
-    expect(getFlightView).not.toHaveBeenCalled()
     expect(wrapper.findComponent({ name: 'FlightTrackMap' }).props('current')).toBeNull()
   })
 
-  it('switches between realtime and 暂无数据 as the aircraft connects and disconnects', async () => {
+  it('switches between realtime and 暂无数据 as events start and stop arriving', async () => {
     const wrapper = mountPanel(false, true)
     mounted.push(wrapper)
     await flushPromises()
     await wrapper.setProps({ active: true })
     await flushPromises()
-    onFlightTelemetry.mock.calls[0][0]('dispatch-order-id', {
-      capturedAt: Date.now(), latitude: 30.2, longitude: 120.2,
-    })
+    onFlightTelemetry.mock.calls[0][0]('dispatch-order-id', position('p5', Date.now(), 302_000_000, 1_202_000_000))
     await flushPromises()
     expect(wrapper.text()).toContain('实时遥测')
     expect(wrapper.find('[data-testid="flight-live-empty"]').exists()).toBe(false)
