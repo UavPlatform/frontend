@@ -32,7 +32,7 @@ vi.mock('../../src/api/modules/map-config', () => ({ getMapConfig }))
 
 const gcj = (lng: number, lat: number) => wgs84ToGcj02(lng, lat)
 const sample = (index: number, extra: Record<string, unknown> = {}) => ({
-  sampleId: index, capturedAt: index * 2_000, latitude: 30 + index * 0.001, longitude: 120 + index * 0.001, ...extra,
+  eventId: `e${index}`, capturedAt: index * 2_000, latitude: 30 + index * 0.001, longitude: 120 + index * 0.001, ...extra,
 })
 const markerTitled = (prefix: string) =>
   Marker.mock.results.map((result) => result.value).find((marker) => String(marker.title).startsWith(prefix))
@@ -49,10 +49,10 @@ describe('FlightTrackMap', () => {
     mount(FlightTrackMap, {
       props: {
         samples: [
-          { sampleId: 1, capturedAt: 1_000, latitude: 30, longitude: 120 },
-          { sampleId: 2, capturedAt: 2_000, latitude: 31, longitude: 121 },
+          { eventId: 'e1', capturedAt: 1_000, latitude: 30, longitude: 120 },
+          { eventId: 'e2', capturedAt: 2_000, latitude: 31, longitude: 121 },
         ],
-        current: { capturedAt: 3_000, latitude: 32, longitude: 122 },
+        current: { eventId: 'e3', capturedAt: 3_000, latitude: 32, longitude: 122 },
       },
     })
     await flushPromises()
@@ -92,7 +92,7 @@ describe('FlightTrackMap', () => {
   it('works when the map SDK exposes no online conversion API', async () => {
     load.mockResolvedValueOnce({ Map: MapConstructor, Marker, Polyline })
     const wrapper = mount(FlightTrackMap, {
-      props: { samples: [], current: { latitude: 30, longitude: 120 } },
+      props: { samples: [], current: { eventId: 'e0', capturedAt: 0, latitude: 30, longitude: 120 } },
     })
     await flushPromises()
     expect(mapInstance.setCenter).toHaveBeenCalledWith(gcj(120, 30))
@@ -176,7 +176,7 @@ describe('FlightTrackMap', () => {
     const wrapper = mount(FlightTrackMap, {
       props: {
         samples: [1_000, 3_000, 12_000, 14_000].map((capturedAt, index) => ({
-          capturedAt, latitude: 30 + index, longitude: 120 + index,
+          eventId: `e${index}`, capturedAt, latitude: 30 + index, longitude: 120 + index,
         })),
         gaps: [{ from: 3_000, to: 12_000 }],
       },
@@ -190,14 +190,14 @@ describe('FlightTrackMap', () => {
     wrapper.unmount()
   })
 
-  it('keeps separate paths when the aircraft connection changes without labeling it an outage', async () => {
+  it('keeps separate paths when the aircraft changes without labeling it an outage', async () => {
     const wrapper = mount(FlightTrackMap, {
       props: {
         samples: [
-          { capturedAt: 1_000, connectionId: 'first', latitude: 30, longitude: 120 },
-          { capturedAt: 3_000, connectionId: 'first', latitude: 31, longitude: 121 },
-          { capturedAt: 4_000, connectionId: 'second', latitude: 32, longitude: 122 },
-          { capturedAt: 6_000, connectionId: 'second', latitude: 33, longitude: 123 },
+          { eventId: 'a1', capturedAt: 1_000, serialNumber: 'SN-A', serialSource: 'FLIGHT_CONTROLLER', latitude: 30, longitude: 120 },
+          { eventId: 'a2', capturedAt: 3_000, serialNumber: 'SN-A', serialSource: 'FLIGHT_CONTROLLER', latitude: 31, longitude: 121 },
+          { eventId: 'b1', capturedAt: 4_000, serialNumber: 'SN-B', serialSource: 'FLIGHT_CONTROLLER', latitude: 32, longitude: 122 },
+          { eventId: 'b2', capturedAt: 6_000, serialNumber: 'SN-B', serialSource: 'FLIGHT_CONTROLLER', latitude: 33, longitude: 123 },
         ],
       },
     })

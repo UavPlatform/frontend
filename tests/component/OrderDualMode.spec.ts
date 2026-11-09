@@ -4,17 +4,17 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
 import OrderDetailView from '../../src/views/OrderDetailView.vue'
 
-const { getAdminDispatchOrderDetail, getFlightView } = vi.hoisted(() => ({
+const { getAdminDispatchOrderDetail, getFlightProjection } = vi.hoisted(() => ({
   getAdminDispatchOrderDetail: vi.fn(),
-  getFlightView: vi.fn(),
+  getFlightProjection: vi.fn(),
 }))
 
 vi.mock('../../src/api/modules/admin-dispatch', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../src/api/modules/admin-dispatch')
   return { ...actual, getAdminDispatchOrderDetail }
 })
-// The supervise panel polls connection state; keep it off the network.
-vi.mock('../../src/api/modules/flight-record', () => ({ getFlightView }))
+// The supervise panel polls the event projection; keep it off the network.
+vi.mock('../../src/api/modules/flight-record', () => ({ getFlightProjection }))
 vi.mock('../../src/components/flight/FlightHistoryPanel.vue', () => ({
   default: { template: '<div data-testid="flight-history" />', props: ['orderId'] },
 }))
